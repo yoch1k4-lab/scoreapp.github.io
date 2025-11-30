@@ -33,7 +33,8 @@
 
     <script type="text/babel">
         // --- KONFIGURASI URL SCRIPT ---
-        // Masukkan URL Web App Google Apps Script Anda di sini agar tidak perlu ketik ulang.
+        // ⚠️ PENTING: Masukkan URL Web App Google Apps Script Anda di sini.
+        // Karena input manual dihilangkan, URL ini WAJIB diisi di sini agar fitur save berfungsi.
         // Contoh: const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbx.../exec";
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
@@ -118,15 +119,10 @@
             }, [currentUrl, isVisible]);
 
             const handleSync = async () => {
-                if (!url) { alert("Masukkan URL Web App dulu!"); return; }
+                if (!url) { alert("URL belum disetting! Harap isi PREFILLED_SHEET_URL di bagian atas kode index.html."); return; }
                 setIsSyncing(true);
                 await onSync(url);
                 setIsSyncing(false);
-            };
-
-            const handleSaveUrl = () => {
-                onSaveUrl(url);
-                alert("URL tersimpan di browser ini!");
             };
 
             if (!isVisible) return null;
@@ -136,22 +132,19 @@
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
                         
-                        <div className="mb-4">
-                            <label className="block text-sm font-bold mb-2 text-gray-700">Google Apps Script Web App URL:</label>
-                            <input 
-                                type="text" 
-                                value={url} 
-                                onChange={e => setUrl(e.target.value)} 
-                                placeholder="https://script.google.com/macros/s/..."
-                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:ring-2 focus:ring-[#5D3FD3] outline-none"
-                            />
-                            <button onClick={handleSaveUrl} className="mt-2 text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-semibold text-gray-700">💾 Simpan URL Saja</button>
+                        {/* Status Display menggantikan Input */}
+                        <div className="mb-6 text-center">
+                            <p className="text-sm font-semibold text-gray-700">Status Koneksi:</p>
+                            <p className={`text-sm ${url ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
+                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi di Kode"}
+                            </p>
+                            {url && <p className="text-[10px] text-gray-400 mt-1 break-all mx-4">{url}</p>}
                         </div>
 
                         <button 
                             onClick={handleSync} 
-                            disabled={isSyncing}
-                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                            disabled={isSyncing || !url}
+                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                         >
                             {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
                         </button>
@@ -190,7 +183,7 @@
                                         <li>Execute as: <b>Me</b>.</li>
                                         <li>Who has access: <b>Anyone</b> (Wajib "Anyone" agar bisa diakses aplikasi ini).</li>
                                         <li>Klik <b>Deploy</b>, lalu copy <b>Web app URL</b>.</li>
-                                        <li>Paste URL tersebut di kolom input di atas.</li>
+                                        <li><b>Paste URL tersebut ke dalam variabel PREFILLED_SHEET_URL di bagian paling atas kode file index.html ini.</b></li>
                                     </ol>
                                 </div>
                             )}

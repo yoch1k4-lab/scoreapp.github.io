@@ -32,6 +32,11 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // --- KONFIGURASI URL SCRIPT ---
+        // Masukkan URL Web App Google Apps Script Anda di sini agar tidak perlu ketik ulang.
+        // Contoh: const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbx.../exec";
+        const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
+
         const { useState, useEffect, useCallback } = React;
 
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
@@ -40,7 +45,7 @@
         const REDO_KEY = '@scoreKeeperRedo_web';
         const HISTORY_KEY = '@scoreKeeperHistory_web';
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
-        const SHEETS_KEY = '@scoreKeeperSheets_web'; // New Key for Sheets URL
+        const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
         // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
@@ -107,7 +112,10 @@
             const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
-            useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
+            // Update local state when prop changes
+            useEffect(() => { 
+                setUrl(currentUrl || ''); 
+            }, [currentUrl, isVisible]);
 
             const handleSync = async () => {
                 if (!url) { alert("Masukkan URL Web App dulu!"); return; }
@@ -135,7 +143,7 @@
                                 value={url} 
                                 onChange={e => setUrl(e.target.value)} 
                                 placeholder="https://script.google.com/macros/s/..."
-                                className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:ring-2 focus:ring-[#5D3FD3] outline-none"
                             />
                             <button onClick={handleSaveUrl} className="mt-2 text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-semibold text-gray-700">💾 Simpan URL Saja</button>
                         </div>
@@ -508,12 +516,12 @@
             const [editModalVisible, setEditModalVisible] = useState(false);
             const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
             const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
-            const [sheetModalVisible, setSheetModalVisible] = useState(false); // NEW STATE
+            const [sheetModalVisible, setSheetModalVisible] = useState(false); 
             const [debugModalVisible, setDebugModalVisible] = useState(false);
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             
-            // Sheets Integration State
+            // Sheets Integration State - PRIORITIZE PREFILLED
             const [sheetUrl, setSheetUrl] = useState('');
 
             const setNotification = useCallback((notif) => {
@@ -543,9 +551,9 @@
                     const jsonData = localStorage.getItem(DATA_KEY);
                     setData(jsonData ? JSON.parse(jsonData) : getInitialData(loadedPlayers));
                     
-                    // Load Sheets URL
+                    // Load Sheets URL with fallback to PREFILLED
                     const savedSheetUrl = localStorage.getItem(SHEETS_KEY);
-                    if (savedSheetUrl) setSheetUrl(savedSheetUrl);
+                    setSheetUrl(savedSheetUrl || PREFILLED_SHEET_URL || '');
                 } catch (e) {
                     setPlayers(DEFAULT_PLAYERS);
                     setData(getInitialData(DEFAULT_PLAYERS));

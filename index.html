@@ -40,6 +40,7 @@
         const REDO_KEY = '@scoreKeeperRedo_web';
         const HISTORY_KEY = '@scoreKeeperHistory_web';
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
+        const SHEETS_KEY = '@scoreKeeperSheets_web'; // New Key for Sheets URL
 
         // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
@@ -95,6 +96,99 @@
                             <button onClick={onClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Batal</button>
                             <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">YA</button>
                         </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- NEW COMPONENT: Google Sheets Modal ---
+        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
+            const [url, setUrl] = useState(currentUrl || '');
+            const [showTutorial, setShowTutorial] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
+
+            useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
+
+            const handleSync = async () => {
+                if (!url) { alert("Masukkan URL Web App dulu!"); return; }
+                setIsSyncing(true);
+                await onSync(url);
+                setIsSyncing(false);
+            };
+
+            const handleSaveUrl = () => {
+                onSaveUrl(url);
+                alert("URL tersimpan di browser ini!");
+            };
+
+            if (!isVisible) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold mb-2 text-gray-700">Google Apps Script Web App URL:</label>
+                            <input 
+                                type="text" 
+                                value={url} 
+                                onChange={e => setUrl(e.target.value)} 
+                                placeholder="https://script.google.com/macros/s/..."
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                            />
+                            <button onClick={handleSaveUrl} className="mt-2 text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-semibold text-gray-700">💾 Simpan URL Saja</button>
+                        </div>
+
+                        <button 
+                            onClick={handleSync} 
+                            disabled={isSyncing}
+                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                        >
+                            {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
+                        </button>
+
+                        <div className="border-t pt-4 flex-grow overflow-y-auto">
+                            <button onClick={() => setShowTutorial(!showTutorial)} className="text-sm text-blue-600 font-semibold underline mb-2 w-full text-left flex items-center justify-between">
+                                <span>Panduan Integrasi (Klik disini)</span>
+                                <span>{showTutorial ? '▲' : '▼'}</span>
+                            </button>
+                            
+                            {showTutorial && (
+                                <div className="text-xs bg-gray-50 p-3 rounded border border-gray-200">
+                                    <ol className="list-decimal pl-4 space-y-2 text-gray-700">
+                                        <li>Buka Google Sheet baru.</li>
+                                        <li>Klik menu <b>Extensions</b> &gt; <b>Apps Script</b>.</li>
+                                        <li>Hapus semua kode yang ada, lalu <b>Copy & Paste</b> kode di bawah ini:</li>
+                                    </ol>
+                                    <pre className="bg-gray-800 text-green-400 p-2 my-2 rounded overflow-x-auto select-all font-mono text-[10px] leading-relaxed">
+{`function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  var row = [new Date()].concat(data.players.map(p => data.scores[p]));
+  
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["Timestamp"].concat(data.players));
+  }
+  
+  sheet.appendRow(row);
+  return ContentService.createTextOutput("Success");
+}`}
+                                    </pre>
+                                    <ol className="list-decimal pl-4 space-y-2 text-gray-700" start="4">
+                                        <li>Klik tombol <b>Deploy</b> (biru) &gt; <b>New deployment</b>.</li>
+                                        <li>Klik ikon gear/settings &gt; Select type: <b>Web app</b>.</li>
+                                        <li>Isi Description (bebas).</li>
+                                        <li>Execute as: <b>Me</b>.</li>
+                                        <li>Who has access: <b>Anyone</b> (Wajib "Anyone" agar bisa diakses aplikasi ini).</li>
+                                        <li>Klik <b>Deploy</b>, lalu copy <b>Web app URL</b>.</li>
+                                        <li>Paste URL tersebut di kolom input di atas.</li>
+                                    </ol>
+                                </div>
+                            )}
+                        </div>
+
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">Tutup</button>
                     </div>
                 </div>
             );
@@ -276,7 +370,6 @@
             );
         };
 
-        // --- MODIFIED COMPONENT START ---
         const EditPlayersModal = ({ isVisible, onClose, players, onSave }) => {
             const [editPlayers, setEditPlayers] = useState([]);
             const [numPlayers, setNumPlayers] = useState(2);
@@ -288,9 +381,8 @@
                 }
             }, [isVisible, players]);
 
-            // FIX: Gunakan fungsi update khusus dengan validasi range
             const updatePlayerCount = (newCount) => {
-                if (newCount < 2 || newCount > 8) return; // Batasi 2-8
+                if (newCount < 2 || newCount > 8) return;
                 
                 setNumPlayers(newCount);
                 let newPlayers = [...editPlayers];
@@ -314,8 +406,6 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center">👥 Edit Pemain</h2>
-                        
-                        {/* FIX: Ganti Input Angka dengan Tombol +/- */}
                         <div className="mb-6">
                             <label className="block font-semibold mb-2 text-center text-gray-700">Jumlah Pemain</label>
                             <div className="flex items-center justify-center gap-6">
@@ -351,7 +441,6 @@
                 </div>
             );
         };
-        // --- MODIFIED COMPONENT END ---
 
         const EditStakesModal = ({ isVisible, onClose, data, players, onSave }) => {
             const [stakes, setStakes] = useState({});
@@ -419,9 +508,13 @@
             const [editModalVisible, setEditModalVisible] = useState(false);
             const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
             const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
+            const [sheetModalVisible, setSheetModalVisible] = useState(false); // NEW STATE
             const [debugModalVisible, setDebugModalVisible] = useState(false);
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+            
+            // Sheets Integration State
+            const [sheetUrl, setSheetUrl] = useState('');
 
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
@@ -449,6 +542,10 @@
                     setPlayers(loadedPlayers);
                     const jsonData = localStorage.getItem(DATA_KEY);
                     setData(jsonData ? JSON.parse(jsonData) : getInitialData(loadedPlayers));
+                    
+                    // Load Sheets URL
+                    const savedSheetUrl = localStorage.getItem(SHEETS_KEY);
+                    if (savedSheetUrl) setSheetUrl(savedSheetUrl);
                 } catch (e) {
                     setPlayers(DEFAULT_PLAYERS);
                     setData(getInitialData(DEFAULT_PLAYERS));
@@ -467,6 +564,43 @@
                     setNotification({ message: 'Error saving data!', type: 'error' });
                 }
             }, [data, setNotification]);
+
+            // --- Sheets Logic ---
+            const handleSaveSheetUrl = (url) => {
+                setSheetUrl(url);
+                localStorage.setItem(SHEETS_KEY, url);
+            };
+
+            const handleSyncToSheets = async (targetUrl) => {
+                if (!data) return;
+                
+                // Prepare Payload
+                const scoresMap = {};
+                players.forEach(p => scoresMap[p] = data[p].skor);
+                
+                const payload = {
+                    players: players,
+                    scores: scoresMap
+                };
+
+                try {
+                    // Note: 'no-cors' mode is used because GAS Web Apps don't always send CORS headers for simple POSTs
+                    // This means we won't see the response content, but the data will be sent.
+                    await fetch(targetUrl, {
+                        method: 'POST',
+                        mode: 'no-cors', 
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    setNotification({ message: '✅ Data terkirim ke Google Sheet!', type: 'success' });
+                    setSheetModalVisible(false);
+                } catch (error) {
+                    console.error(error);
+                    setNotification({ message: '❌ Gagal mengirim. Cek URL atau koneksi.', type: 'error' });
+                }
+            };
 
             const logHistory = useCallback((text) => {
                 const time = new Date().toLocaleString('id-ID', { hour12: false });
@@ -749,15 +883,8 @@
                                 <p>4. Tekan <span className="font-bold">'Submit Kemenangan'</span> untuk menghitung skor.</p>
                             </div>
                             <div>
-                                <h3 className="font-bold text-lg text-[#4B0082]">Transfer Joker</h3>
-                                <p>Gunakan ini jika ada transfer poin joker di luar ronde kemenangan. Pilih penerima poin dan pemberi penalti, lalu tekan 'Transfer'.</p>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg text-[#4B0082]">Tindakan Cepat</h3>
-                                <p>- <span className="font-bold">Undo:</span> Membatalkan aksi terakhir.</p>
-                                <p>- <span className="font-bold">Redo:</span> Mengembalikan aksi yang di-undo.</p>
-                                <p>- <span className="font-bold">Reset Skor:</span> Mengembalikan skor semua pemain ke 0.</p>
-                                <p>- <span className="font-bold">Reset Poin:</span> Mengembalikan patokan N dan J ke 0.</p>
+                                <h3 className="font-bold text-lg text-[#4B0082]">Simpan ke Google Sheet</h3>
+                                <p>Klik ikon awan (☁️) di bawah untuk membuka menu sinkronisasi. Ikuti panduan di dalamnya untuk menghubungkan aplikasi ini ke Google Sheet pribadi Anda.</p>
                             </div>
                          </div>
                     </Modal>
@@ -779,6 +906,14 @@
                         onSave={handleSavePlayers}
                     />
                     
+                    <GoogleSheetsModal 
+                        isVisible={sheetModalVisible}
+                        onClose={() => setSheetModalVisible(false)}
+                        currentUrl={sheetUrl}
+                        onSaveUrl={handleSaveSheetUrl}
+                        onSync={handleSyncToSheets}
+                    />
+
                     <ConfirmationModal 
                         isOpen={confirmModal.isOpen}
                         title={confirmModal.title}
@@ -826,6 +961,7 @@
                         <button onClick={() => setEditModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Skor">✏️</button>
                         <button onClick={() => setEditPlayersModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Pemain">👥</button>
                         <button onClick={() => setEditStakesModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-gray-700 hover:text-white transition-colors" title="Edit Patokan">⚙️</button>
+                        <button onClick={() => setSheetModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-green-600 hover:text-white transition-colors" title="Save ke Sheet">☁️</button>
                     </div>
                 </div>
             );

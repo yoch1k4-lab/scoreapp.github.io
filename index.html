@@ -50,7 +50,7 @@
             return data;
         };
 
-        // --- Shared Components (Moved outside App to prevent re-renders) ---
+        // --- Shared Components ---
 
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
@@ -83,8 +83,8 @@
         const ConfirmationModal = ({ isOpen, title, message, onConfirm, onClose }) => {
             if (!isOpen) return null;
             const handleConfirm = () => {
-                onClose(); // Close UI immediately
-                onConfirm(); // Then execute logic
+                onClose(); 
+                onConfirm(); 
             };
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -136,7 +136,6 @@
             const [jokerHolders, setJokerHolders] = useState([]);
             const [buyers, setBuyers] = useState({});
 
-            // Reset local state when players change
             useEffect(() => {
                 setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
                 setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
@@ -247,7 +246,6 @@
                 if (data && isVisible) {
                     const obj = {};
                     players.forEach(p => {
-                        // Format score to 2 decimal places for consistency
                         obj[p] = data[p].skor.toFixed(2); 
                     });
                     setEditScores(obj);
@@ -267,7 +265,6 @@
                             {players.map(p => (
                                 <div key={p} className="flex items-center mb-4">
                                     <label className="flex-1 text-base font-bold">{p}</label>
-                                    {/* Updated step to 0.5 */}
                                     <input type="number" step="0.5" value={editScores[p] || ''} onChange={e => setEditScores(s => ({...s, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
                                 </div>
                             ))}
@@ -279,6 +276,7 @@
             );
         };
 
+        // --- MODIFIED COMPONENT START ---
         const EditPlayersModal = ({ isVisible, onClose, players, onSave }) => {
             const [editPlayers, setEditPlayers] = useState([]);
             const [numPlayers, setNumPlayers] = useState(2);
@@ -290,16 +288,18 @@
                 }
             }, [isVisible, players]);
 
-            const handleNumPlayersChange = (e) => {
-                let val = Math.max(2, Math.min(8, parseInt(e.target.value) || 2));
-                setNumPlayers(val);
+            // FIX: Gunakan fungsi update khusus dengan validasi range
+            const updatePlayerCount = (newCount) => {
+                if (newCount < 2 || newCount > 8) return; // Batasi 2-8
+                
+                setNumPlayers(newCount);
                 let newPlayers = [...editPlayers];
-                if (val > newPlayers.length) {
-                    for (let i = newPlayers.length; i < val; i++) {
+                if (newCount > newPlayers.length) {
+                    for (let i = newPlayers.length; i < newCount; i++) {
                         newPlayers.push(`Player${i+1}`);
                     }
                 } else {
-                    newPlayers = newPlayers.slice(0, val);
+                    newPlayers = newPlayers.slice(0, newCount);
                 }
                 setEditPlayers(newPlayers);
             };
@@ -314,10 +314,25 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center">👥 Edit Pemain</h2>
-                        <div className="mb-4">
-                            <label className="block font-semibold mb-2">Jumlah Pemain (2-8):</label>
-                            <input type="number" min={2} max={8} value={numPlayers} onChange={handleNumPlayersChange} className="border border-gray-300 rounded-lg p-2 text-center w-full font-bold"/>
+                        
+                        {/* FIX: Ganti Input Angka dengan Tombol +/- */}
+                        <div className="mb-6">
+                            <label className="block font-semibold mb-2 text-center text-gray-700">Jumlah Pemain</label>
+                            <div className="flex items-center justify-center gap-6">
+                                <button 
+                                    onClick={() => updatePlayerCount(numPlayers - 1)}
+                                    disabled={numPlayers <= 2}
+                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                >-</button>
+                                <span className="text-3xl font-bold text-[#4B0082] w-12 text-center">{numPlayers}</span>
+                                <button 
+                                    onClick={() => updatePlayerCount(numPlayers + 1)}
+                                    disabled={numPlayers >= 8}
+                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                >+</button>
+                            </div>
                         </div>
+
                         <div className="overflow-y-auto flex-grow">
                             {Array.from({length: numPlayers}).map((_, idx) => (
                                 <div key={idx} className="flex items-center mb-3">
@@ -336,6 +351,7 @@
                 </div>
             );
         };
+        // --- MODIFIED COMPONENT END ---
 
         const EditStakesModal = ({ isVisible, onClose, data, players, onSave }) => {
             const [stakes, setStakes] = useState({});
@@ -344,7 +360,6 @@
                 if (data && isVisible) {
                     const obj = {};
                     players.forEach(p => {
-                        // Format stakes without decimals for integer input
                         obj[p] = {
                             n: Math.round(data[p].patokan_normal).toString(),
                             j: Math.round(data[p].patokan_joker).toString()
@@ -368,7 +383,6 @@
                             {players.map(p => (
                                 <div key={p} className="flex items-center mb-4">
                                     <label className="flex-1 text-base font-bold">{p}</label>
-                                    {/* Updated step to 1 for integer input */}
                                     <input type="number" step="1" value={stakes[p]?.n || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], n: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full" placeholder="Normal" />
                                     <input type="number" step="1" value={stakes[p]?.j || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], j: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full ml-2" placeholder="Joker" />
                                 </div>
@@ -401,7 +415,6 @@
             const [data, setData] = useState(null);
             const [notification, setNotificationRaw] = useState({ message: 'Welcome! Use the Help menu to start.', type: 'info' });
             
-            // UI States
             const [helpModalVisible, setHelpModalVisible] = useState(false);
             const [editModalVisible, setEditModalVisible] = useState(false);
             const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
@@ -410,18 +423,16 @@
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
-            // MODIFIED: Auto-scroll to top when notification appears
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
                 if (notif && notif.message) {
-                    window.scrollTo(0, 0); // Directly scroll to top instantly
+                    window.scrollTo(0, 0); 
                     setTimeout(() => {
                         setNotificationRaw({ message: '', type: notif.type || 'info' });
                     }, 2000);
                 }
             }, []);
 
-            // --- Load players on initial render ---
             useEffect(() => {
                 try {
                     const jsonPlayers = localStorage.getItem(PLAYER_KEY);
@@ -431,7 +442,6 @@
                 } catch (e) {}
             }, []);
 
-            // --- Load data on initial render ---
             useEffect(() => {
                 try {
                     const jsonPlayers = localStorage.getItem(PLAYER_KEY);
@@ -445,7 +455,6 @@
                 }
             }, []);
 
-            // --- Data Persistence ---
             const saveData = useCallback((newData, backupCurrent = true) => {
                 try {
                     if (backupCurrent && data) {
@@ -463,11 +472,10 @@
                 const time = new Date().toLocaleString('id-ID', { hour12: false });
                 const newEntry = `[${time}] ${text}`;
                 const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-                const updatedHistory = [newEntry, ...currentHistory].slice(50); // Keep last 50
+                const updatedHistory = [newEntry, ...currentHistory].slice(50);
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             }, []);
 
-            // --- Core Logic Handlers ---
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
                 if (!data) return;
                 const newData = JSON.parse(JSON.stringify(data));
@@ -670,14 +678,10 @@
                 setDebugModalVisible(true);
             };
 
-            // Modal save handlers
             const handleSaveScores = (editScores) => {
                 const newData = JSON.parse(JSON.stringify(data));
                 let totalCheck = 0;
-
-                // Validate Total Sum first
                 players.forEach(p => {
-                    // Use Math.round to handle potential floating point issues when parsing 0.5 steps
                     const val = parseFloat(editScores[p]) || 0;
                     totalCheck += val;
                 });
@@ -687,7 +691,6 @@
                     return;
                 }
 
-                // If valid, save
                 players.forEach(p => {
                     newData[p].skor = parseFloat(editScores[p]) || 0;
                 });
@@ -717,7 +720,6 @@
             const handleSaveStakes = (stakes) => {
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => {
-                    // Use Math.round to ensure integer values are saved even if input was float
                     newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
                     newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
                 });

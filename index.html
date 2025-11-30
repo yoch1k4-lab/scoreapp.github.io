@@ -50,19 +50,376 @@
             return data;
         };
 
+        // --- Shared Components (Moved outside App to prevent re-renders) ---
+
+        const CustomSwitch = ({ value, onValueChange, disabled }) => (
+            <button
+                type="button"
+                onClick={() => !disabled && onValueChange(!value)}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+                    value ? 'bg-[#5D3FD3]' : 'bg-gray-300'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={disabled}
+            >
+                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    value ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+            </button>
+        );
+
+        const Modal = ({ isVisible, onClose, title, children }) => {
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">{title}</h2>
+                        <div className="overflow-y-auto flex-grow">{children}</div>
+                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfirmationModal = ({ isOpen, title, message, onConfirm, onClose }) => {
+            if (!isOpen) return null;
+            const handleConfirm = () => {
+                onClose(); // Close UI immediately
+                onConfirm(); // Then execute logic
+            };
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
+                        <p className="text-gray-600 mb-6 text-center">{message}</p>
+                        <div className="flex justify-center gap-4">
+                            <button onClick={onClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Batal</button>
+                            <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">YA</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ScoreTable = ({ data, players }) => {
+            if (!data) return <div className="text-center mt-5 text-lg text-gray-600">Loading data...</div>;
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <div className="flex pb-2 border-b-2 border-gray-300">
+                        <p className="flex-[3] text-base font-bold text-black">Pemain</p>
+                        <p className="flex-1 text-base font-bold text-black text-center">N</p>
+                        <p className="flex-1 text-base font-bold text-black text-center">J</p>
+                        <p className="flex-[2] text-base font-bold text-black text-right">Skor</p>
+                    </div>
+                    {players.map(player => {
+                        const info = data[player];
+                        const score = info?.skor ?? 0;
+                        const scoreColor = score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-gray-800';
+                        return(
+                            <div key={player} className="flex items-center py-2.5 border-b border-gray-100 last:border-b-0">
+                                <p className="flex-[3] text-base text-gray-800">{player}</p>
+                                <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
+                                <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
+                                <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
+                                    {score.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        const WinSection = ({ players, onUpdateScore, onUpdateTeamScore, setNotification }) => {
+            const [winners, setWinners] = useState([]);
+            const [isJoker, setIsJoker] = useState(false);
+            const [isWin2, setIsWin2] = useState(false);
+            const [jokerHolders, setJokerHolders] = useState([]);
+            const [buyers, setBuyers] = useState({});
+
+            // Reset local state when players change
+            useEffect(() => {
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+            }, [players]);
+
+            const togglePlayer = (p, list, setList) => {
+                setList(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
+            };
+            const resetForm = () => {
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+            };
+            const handleSubmit = () => {
+                if (winners.length === 0 || winners.length > 2) {
+                    setNotification({message: 'Pilih 1 atau 2 pemenang.', type: 'error'}); return;
+                }
+                const parsedBuyers = Object.entries(buyers)
+                    .filter(([,amount]) => amount && !isNaN(parseInt(amount)))
+                    .map(([name, amount]) => ({name, amount: parseInt(amount)}));
+                
+                if (winners.length === 1) {
+                    onUpdateScore(winners[0], isJoker, isWin2, jokerHolders, parsedBuyers);
+                } else {
+                    onUpdateTeamScore(winners, jokerHolders, parsedBuyers);
+                }
+                resetForm();
+            };
+            const possibleLosers = players.filter(p => !winners.includes(p));
+
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🏆 Catat Kemenangan</h2>
+                    <label className="text-base font-semibold mb-2 block text-gray-700">1. Pilih Pemenang (1 atau 2)</label>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {players.map(p => (
+                            <button key={p} onClick={() => togglePlayer(p, winners, setWinners)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${winners.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                        <label className="text-base font-semibold text-gray-700">Menang Joker?</label>
+                        <CustomSwitch value={isJoker} onValueChange={setIsJoker} disabled={winners.length === 2}/>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                        <label className="text-base font-semibold text-gray-700">Menang x2?</label>
+                        <CustomSwitch value={isWin2} onValueChange={setIsWin2} disabled={winners.length === 2}/>
+                    </div>
+                    <label className="text-base font-semibold mt-4 mb-2 block text-gray-700">2. Opsi Tambahan (Opsional)</label>
+                    <p className="text-sm font-medium mb-1 text-gray-600">Penalti Joker (yang kalah)</p>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {possibleLosers.map(p => (
+                            <button key={p} onClick={() => togglePlayer(p, jokerHolders, setJokerHolders)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${jokerHolders.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
+                                {p} -j
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-sm font-medium mb-2 text-gray-600">Buy Poin</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        {players.map(p => (
+                            <div key={p} className="flex items-center">
+                                <label className="flex-1 text-base">{p} buy:</label>
+                                <input type="number" placeholder="0" value={buyers[p] || ''} onChange={e => setBuyers(prev => ({...prev, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={handleSubmit} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Submit Kemenangan</button>
+                </div>
+            );
+        };
+
+        const JokerTransferSection = ({ players, onJokerTransfer }) => {
+            const [gainer, setGainer] = useState(null);
+            const [loser, setLoser] = useState(null);
+            useEffect(() => {setGainer(null);setLoser(null);}, [players]);
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🃏 Transfer Joker</h2>
+                    <label className="text-base font-semibold mb-2 block text-gray-700">Penerima (dapat poin)</label>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {players.map(p => ( <button key={p} onClick={() => setGainer(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${gainer === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
+                    </div>
+                    <label className="text-base font-semibold mb-2 block text-gray-700">Pemberi (kena penalti)</label>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {players.map(p => ( <button key={p} onClick={() => setLoser(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${loser === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
+                    </div>
+                    <button onClick={() => onJokerTransfer(gainer, loser)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Transfer</button>
+                </div>
+            );
+        };
+
+        const ActionsSection = ({ onUndo, onRedo, onResetScores, onResetStakes }) => (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+                <h2 className="text-xl font-bold mb-4 text-[#4B0082]">⚡️ Tindakan Cepat</h2>
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={onUndo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↩️ Undo</button>
+                    <button onClick={onRedo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↪️ Redo</button>
+                    <button onClick={onResetScores} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Skor</button>
+                    <button onClick={onResetStakes} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Poin</button>
+                </div>
+            </div>
+        );
+
+        const EditScoresModal = ({ isVisible, onClose, data, players, onSave }) => {
+            const [editScores, setEditScores] = useState({});
+
+            useEffect(() => {
+                if (data && isVisible) {
+                    const obj = {};
+                    players.forEach(p => {
+                        // Format score to 2 decimal places for consistency
+                        obj[p] = data[p].skor.toFixed(2); 
+                    });
+                    setEditScores(obj);
+                }
+            }, [data, isVisible, players]);
+
+            const handleSave = () => {
+                onSave(editScores);
+            };
+
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">✏️ Edit Skor Manual (0.5)</h2>
+                        <div className="overflow-y-auto flex-grow">
+                            {players.map(p => (
+                                <div key={p} className="flex items-center mb-4">
+                                    <label className="flex-1 text-base font-bold">{p}</label>
+                                    {/* Updated step to 0.5 */}
+                                    <input type="number" step="0.5" value={editScores[p] || ''} onChange={e => setEditScores(s => ({...s, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={handleSave} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const EditPlayersModal = ({ isVisible, onClose, players, onSave }) => {
+            const [editPlayers, setEditPlayers] = useState([]);
+            const [numPlayers, setNumPlayers] = useState(2);
+
+            useEffect(() => {
+                if(isVisible) {
+                    setEditPlayers([...players]);
+                    setNumPlayers(players.length);
+                }
+            }, [isVisible, players]);
+
+            const handleNumPlayersChange = (e) => {
+                let val = Math.max(2, Math.min(8, parseInt(e.target.value) || 2));
+                setNumPlayers(val);
+                let newPlayers = [...editPlayers];
+                if (val > newPlayers.length) {
+                    for (let i = newPlayers.length; i < val; i++) {
+                        newPlayers.push(`Player${i+1}`);
+                    }
+                } else {
+                    newPlayers = newPlayers.slice(0, val);
+                }
+                setEditPlayers(newPlayers);
+            };
+
+            const handleSavePlayers = () => {
+                onSave(editPlayers);
+                onClose();
+            };
+
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">👥 Edit Pemain</h2>
+                        <div className="mb-4">
+                            <label className="block font-semibold mb-2">Jumlah Pemain (2-8):</label>
+                            <input type="number" min={2} max={8} value={numPlayers} onChange={handleNumPlayersChange} className="border border-gray-300 rounded-lg p-2 text-center w-full font-bold"/>
+                        </div>
+                        <div className="overflow-y-auto flex-grow">
+                            {Array.from({length: numPlayers}).map((_, idx) => (
+                                <div key={idx} className="flex items-center mb-3">
+                                    <label className="w-12 text-base font-bold text-gray-700">{idx+1}.</label>
+                                    <input type="text" value={editPlayers[idx] || ""} onChange={e => {
+                                        const arr = [...editPlayers];
+                                        arr[idx] = e.target.value;
+                                        setEditPlayers(arr);
+                                    }} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={handleSavePlayers} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const EditStakesModal = ({ isVisible, onClose, data, players, onSave }) => {
+            const [stakes, setStakes] = useState({});
+
+            useEffect(() => {
+                if (data && isVisible) {
+                    const obj = {};
+                    players.forEach(p => {
+                        // Format stakes without decimals for integer input
+                        obj[p] = {
+                            n: Math.round(data[p].patokan_normal).toString(),
+                            j: Math.round(data[p].patokan_joker).toString()
+                        };
+                    });
+                    setStakes(obj);
+                }
+            }, [data, isVisible, players]);
+
+            const handleSaveStakes = () => {
+                onSave(stakes);
+                onClose();
+            };
+
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">⚙️ Edit Patokan Poin (Bilangan Bulat)</h2>
+                        <div className="overflow-y-auto flex-grow">
+                            {players.map(p => (
+                                <div key={p} className="flex items-center mb-4">
+                                    <label className="flex-1 text-base font-bold">{p}</label>
+                                    {/* Updated step to 1 for integer input */}
+                                    <input type="number" step="1" value={stakes[p]?.n || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], n: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full" placeholder="Normal" />
+                                    <input type="number" step="1" value={stakes[p]?.j || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], j: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full ml-2" placeholder="Joker" />
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={handleSaveStakes} className="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-gray-700 transition-colors">Simpan Patokan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const DebugModal = ({ isVisible, onClose, info }) => {
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">🐞 Debug Perhitungan Terakhir</h2>
+                        <div className="overflow-y-auto flex-grow text-left text-sm" dangerouslySetInnerHTML={{__html: info}} />
+                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+
         const App = () => {
-            const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
-            // --- Player management ---
             const [players, setPlayers] = useState(DEFAULT_PLAYERS);
-            // --- Main state ---
             const [data, setData] = useState(null);
-            const [notification, setNotification] = useState({ message: 'Welcome! Use the Help menu to start.', type: 'info' });
+            const [notification, setNotificationRaw] = useState({ message: 'Welcome! Use the Help menu to start.', type: 'info' });
+            
+            // UI States
             const [helpModalVisible, setHelpModalVisible] = useState(false);
-            const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
-            const [debugModalVisible, setDebugModalVisible] = useState(false);
-            const [debugInfo, setDebugInfo] = useState(null);
             const [editModalVisible, setEditModalVisible] = useState(false);
             const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
+            const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
+            const [debugModalVisible, setDebugModalVisible] = useState(false);
+            const [debugInfo, setDebugInfo] = useState(null);
+            const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+            // MODIFIED: Auto-scroll to top when notification appears
+            const setNotification = useCallback((notif) => {
+                setNotificationRaw(notif);
+                if (notif && notif.message) {
+                    window.scrollTo(0, 0); // Directly scroll to top instantly
+                    setTimeout(() => {
+                        setNotificationRaw({ message: '', type: notif.type || 'info' });
+                    }, 2000);
+                }
+            }, []);
 
             // --- Load players on initial render ---
             useEffect(() => {
@@ -100,18 +457,17 @@
                 } catch (e) {
                     setNotification({ message: 'Error saving data!', type: 'error' });
                 }
-            }, [data]);
+            }, [data, setNotification]);
 
             const logHistory = useCallback((text) => {
                 const time = new Date().toLocaleString('id-ID', { hour12: false });
                 const newEntry = `[${time}] ${text}`;
                 const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-                const updatedHistory = [newEntry, ...currentHistory].slice(0, 50);
-                setHistory(updatedHistory);
+                const updatedHistory = [newEntry, ...currentHistory].slice(50); // Keep last 50
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             }, []);
 
-            // --- Core Logic ---
+            // --- Core Logic Handlers ---
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
                 if (!data) return;
                 const newData = JSON.parse(JSON.stringify(data));
@@ -295,7 +651,6 @@
                 setNotification({ message: "➡️ Redo berhasil!", type: 'success' });
             };
 
-            // DEBUG FEATURE
             const handleShowDebug = () => {
                 let detail = "";
                 try {
@@ -315,382 +670,59 @@
                 setDebugModalVisible(true);
             };
 
-            // EDIT SKOR MODAL
-            const EditModal = () => {
-                const [editScores, setEditScores] = useState(() => {
-                    const obj = {};
-                    players.forEach(p => {
-                        obj[p] = data ? data[p].skor.toFixed(2) : "0";
-                    });
-                    return obj;
+            // Modal save handlers
+            const handleSaveScores = (editScores) => {
+                const newData = JSON.parse(JSON.stringify(data));
+                let totalCheck = 0;
+
+                // Validate Total Sum first
+                players.forEach(p => {
+                    // Use Math.round to handle potential floating point issues when parsing 0.5 steps
+                    const val = parseFloat(editScores[p]) || 0;
+                    totalCheck += val;
                 });
 
-                useEffect(() => {
-                    if (data) {
-                        const obj = {};
-                        players.forEach(p => {
-                            obj[p] = data[p].skor.toFixed(2);
-                        });
-                        setEditScores(obj);
-                    }
-                }, [data, editModalVisible, players]);
+                if (Math.abs(totalCheck) > 0.01) {
+                    setNotification({ message: `❌ Gagal! Total skor tidak seimbang (${totalCheck.toFixed(2)}). Total harus 0.`, type: 'error' });
+                    return;
+                }
 
-                const handleSave = () => {
-                    const newData = JSON.parse(JSON.stringify(data));
-                    players.forEach(p => {
-                        newData[p].skor = parseFloat(editScores[p]) || 0;
-                    });
-                    saveData(newData);
-                    logHistory("Edit manual skor pemain.");
-                    setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
-                    setEditModalVisible(false);
-                };
-
-                return !editModalVisible ? null : (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setEditModalVisible(false)}>
-                        <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                            <h2 className="text-2xl font-bold mb-4 text-center">✏️ Edit Skor Manual</h2>
-                            <div className="overflow-y-auto flex-grow">
-                                {players.map(p => (
-                                    <div key={p} className="flex items-center mb-4">
-                                        <label className="flex-1 text-base font-bold">{p}</label>
-                                        <input type="number" step="0.01" value={editScores[p]} onChange={e => setEditScores(s => ({...s, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={handleSave} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
-                            <button onClick={() => setEditModalVisible(false)} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
-                        </div>
-                    </div>
-                );
-            };
-
-            // EDIT PLAYERS MODAL
-            const EditPlayersModal = () => {
-                const [editPlayers, setEditPlayers] = useState(players.map(p => p));
-                const [numPlayers, setNumPlayers] = useState(players.length);
-
-                useEffect(() => {
-                    setEditPlayers(players.map(p => p));
-                    setNumPlayers(players.length);
-                }, [editPlayersModalVisible, players]);
-
-                const handleNumPlayersChange = (e) => {
-                    let val = Math.max(2, Math.min(8, parseInt(e.target.value) || 2));
-                    setNumPlayers(val);
-                    let newPlayers = [...editPlayers];
-                    if (val > newPlayers.length) {
-                        for (let i = newPlayers.length; i < val; i++) {
-                            newPlayers.push(`Player${i+1}`);
-                        }
-                    } else {
-                        newPlayers = newPlayers.slice(0, val);
-                    }
-                    setEditPlayers(newPlayers);
-                };
-
-                const handleNameChange = (idx, name) => {
-                    let arr = [...editPlayers];
-                    arr[idx] = name;
-                    setEditPlayers(arr);
-                };
-
-                const handleSavePlayers = () => {
-                    // Remove empty names
-                    let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
-                    if (validPlayers.length < 2) {
-                        setNotification({message:"Minimal 2 pemain!", type:"error"});
-                        return;
-                    }
-                    // update localstorage for players
-                    localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
-                    setPlayers(validPlayers);
-                    // update data structure for new players
-                    let newData = getInitialData(validPlayers);
-                    // try to keep scores for old unchanged players
-                    validPlayers.forEach(p => {
-                        if (data[p]) newData[p] = {...data[p]};
-                    });
-                    saveData(newData, false);
-                    logHistory(`Edit pemain: ${validPlayers.join(', ')}`);
-                    setNotification({message: "✅ Nama & jumlah pemain berhasil diupdate!", type: "success"});
-                    setEditPlayersModalVisible(false);
-                };
-
-                return !editPlayersModalVisible ? null : (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setEditPlayersModalVisible(false)}>
-                        <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                            <h2 className="text-2xl font-bold mb-4 text-center">👥 Edit Pemain</h2>
-                            <div className="mb-4">
-                                <label className="block font-semibold mb-2">Jumlah Pemain (2-8):</label>
-                                <input type="number" min={2} max={8} value={numPlayers} onChange={handleNumPlayersChange} className="border border-gray-300 rounded-lg p-2 text-center w-full font-bold"/>
-                            </div>
-                            <div className="overflow-y-auto flex-grow">
-                                {Array.from({length: numPlayers}).map((_, idx) => (
-                                    <div key={idx} className="flex items-center mb-3">
-                                        <label className="w-12 text-base font-bold text-gray-700">{idx+1}.</label>
-                                        <input type="text" value={editPlayers[idx] || ""} onChange={e => handleNameChange(idx, e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={handleSavePlayers} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
-                            <button onClick={() => setEditPlayersModalVisible(false)} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
-                        </div>
-                    </div>
-                );
-            };
-
-            const CustomSwitch = ({ value, onValueChange, disabled }) => (
-                <button
-                    type="button"
-                    onClick={() => !disabled && onValueChange(!value)}
-                    className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-                        value ? 'bg-[#5D3FD3]' : 'bg-gray-300'
-                    } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    disabled={disabled}
-                >
-                    <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                        value ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                </button>
-            );
-
-            const ScoreTable = () => {
-                if (!data) return <div className="text-center mt-5 text-lg text-gray-600">Loading data...</div>;
-                return (
-                    <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                        <div className="flex pb-2 border-b-2 border-gray-300">
-                            <p className="flex-[3] text-base font-bold text-black">Pemain</p>
-                            <p className="flex-1 text-base font-bold text-black text-center">N</p>
-                            <p className="flex-1 text-base font-bold text-black text-center">J</p>
-                            <p className="flex-[2] text-base font-bold text-black text-right">Skor</p>
-                        </div>
-                        {players.map(player => {
-                            const info = data[player];
-                            const score = info?.skor ?? 0;
-                            const scoreColor = score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-gray-800';
-                            return(
-                                <div key={player} className="flex items-center py-2.5 border-b border-gray-100 last:border-b-0">
-                                    <p className="flex-[3] text-base text-gray-800">{player}</p>
-                                    <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
-                                    <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
-                                    <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
-                                        {score.toFixed(2).replace('.', ',')}
-                                    </p>
-                                </div>
-                            );
-                        })}
-                    </div>
-                );
-            };
-
-            const WinSection = () => {
-                const [winners, setWinners] = useState([]);
-                const [isJoker, setIsJoker] = useState(false);
-                const [isWin2, setIsWin2] = useState(false);
-                const [jokerHolders, setJokerHolders] = useState([]);
-                const [buyers, setBuyers] = useState(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
-                useEffect(() => {
-                    setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
-                    setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
-                }, [players]);
-
-                const togglePlayer = (p, list, setList) => {
-                    setList(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
-                };
-                const resetForm = () => {
-                    setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
-                    setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
-                };
-                const handleSubmit = () => {
-                    if (winners.length === 0 || winners.length > 2) {
-                        setNotification({message: 'Pilih 1 atau 2 pemenang.', type: 'error'}); return;
-                    }
-                    const parsedBuyers = Object.entries(buyers)
-                        .filter(([,amount]) => amount && !isNaN(parseInt(amount)))
-                        .map(([name, amount]) => ({name, amount: parseInt(amount)}));
-                    if (winners.length === 1) handleUpdateScore(winners[0], isJoker, isWin2, jokerHolders, parsedBuyers);
-                    else handleUpdateTeamScore(winners, jokerHolders, parsedBuyers);
-                    resetForm();
-                };
-                const possibleLosers = players.filter(p => !winners.includes(p));
-                return (
-                    <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                        <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🏆 Catat Kemenangan</h2>
-                        <label className="text-base font-semibold mb-2 block text-gray-700">1. Pilih Pemenang (1 atau 2)</label>
-                        <div className="flex flex-wrap mb-3 -m-1">
-                            {players.map(p => (
-                                <button key={p} onClick={() => togglePlayer(p, winners, setWinners)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${winners.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="flex justify-between items-center py-2">
-                            <label className="text-base font-semibold text-gray-700">Menang Joker?</label>
-                            <CustomSwitch value={isJoker} onValueChange={setIsJoker} disabled={winners.length === 2}/>
-                        </div>
-                        <div className="flex justify-between items-center py-2">
-                            <label className="text-base font-semibold text-gray-700">Menang x2?</label>
-                            <CustomSwitch value={isWin2} onValueChange={setIsWin2} disabled={winners.length === 2}/>
-                        </div>
-                        <label className="text-base font-semibold mt-4 mb-2 block text-gray-700">2. Opsi Tambahan (Opsional)</label>
-                        <p className="text-sm font-medium mb-1 text-gray-600">Penalti Joker (yang kalah)</p>
-                        <div className="flex flex-wrap mb-3 -m-1">
-                            {possibleLosers.map(p => (
-                                <button key={p} onClick={() => togglePlayer(p, jokerHolders, setJokerHolders)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${jokerHolders.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
-                                    {p} -j
-                                </button>
-                            ))}
-                        </div>
-                        <p className="text-sm font-medium mb-2 text-gray-600">Buy Poin</p>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                            {players.map(p => (
-                                <div key={p} className="flex items-center">
-                                    <label className="flex-1 text-base">{p} buy:</label>
-                                    <input type="number" placeholder="0" value={buyers[p]} onChange={e => setBuyers(prev => ({...prev, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
-                                </div>
-                            ))}
-                        </div>
-                        <button onClick={handleSubmit} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Submit Kemenangan</button>
-                    </div>
-                );
-            };
-
-            const JokerTransferSection = () => {
-                const [gainer, setGainer] = useState(null);
-                const [loser, setLoser] = useState(null);
-                useEffect(() => {setGainer(null);setLoser(null);}, [players]);
-                return (
-                    <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                        <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🃏 Transfer Joker</h2>
-                        <label className="text-base font-semibold mb-2 block text-gray-700">Penerima (dapat poin)</label>
-                        <div className="flex flex-wrap mb-3 -m-1">
-                            {players.map(p => ( <button key={p} onClick={() => setGainer(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${gainer === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
-                        </div>
-                        <label className="text-base font-semibold mb-2 block text-gray-700">Pemberi (kena penalti)</label>
-                        <div className="flex flex-wrap mb-3 -m-1">
-                            {players.map(p => ( <button key={p} onClick={() => setLoser(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${loser === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
-                        </div>
-                        <button onClick={() => handleJokerTransfer(gainer, loser)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Transfer</button>
-                    </div>
-                );
-            };
-
-            const SetStakesSection = () => {
-                const [stakes, setStakes] = useState(() => {
-                    const obj = {};
-                    players.forEach(p => {
-                        obj[p] = {
-                            n: data ? data[p].patokan_normal.toString() : "0",
-                            j: data ? data[p].patokan_joker.toString() : "0"
-                        };
-                    });
-                    return obj;
+                // If valid, save
+                players.forEach(p => {
+                    newData[p].skor = parseFloat(editScores[p]) || 0;
                 });
-
-                useEffect(() => {
-                    if (data) {
-                        const obj = {};
-                        players.forEach(p => {
-                            obj[p] = {
-                                n: data[p].patokan_normal.toString(),
-                                j: data[p].patokan_joker.toString()
-                            };
-                        });
-                        setStakes(obj);
-                    }
-                }, [data, editStakesModalVisible, players]);
-
-                const handleSaveStakes = () => {
-                    const newData = JSON.parse(JSON.stringify(data));
-                    players.forEach(p => {
-                        newData[p].patokan_normal = parseFloat(stakes[p].n) || 0;
-                        newData[p].patokan_joker = parseFloat(stakes[p].j) || 0;
-                    });
-                    saveData(newData);
-                    setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});
-                    setEditStakesModalVisible(false);
-                };
-
-                if (!editStakesModalVisible) return null;
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setEditStakesModalVisible(false)}>
-                        <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                            <h2 className="text-2xl font-bold mb-4 text-center">⚙️ Edit Patokan Poin</h2>
-                            <div className="overflow-y-auto flex-grow">
-                                {players.map(p => (
-                                    <div key={p} className="flex items-center mb-4">
-                                        <label className="flex-1 text-base font-bold">{p}</label>
-                                        <input type="number" step="0.01" value={stakes[p].n} onChange={e => setStakes(s => ({...s, [p]: {...s[p], n: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full" placeholder="Normal" />
-                                        <input type="number" step="0.01" value={stakes[p].j} onChange={e => setStakes(s => ({...s, [p]: {...s[p], j: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full ml-2" placeholder="Joker" />
-                                    </div>
-                                ))}
-                            </div>
-                            <button onClick={handleSaveStakes} className="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-gray-700 transition-colors">Simpan Patokan</button>
-                            <button onClick={() => setEditStakesModalVisible(false)} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
-                        </div>
-                    </div>
-                );
+                saveData(newData);
+                logHistory("Edit manual skor pemain.");
+                setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
+                setEditModalVisible(false);
             };
 
-            const ActionsSection = () => (
-                <div className="bg-white rounded-xl p-4 shadow-md">
-                    <h2 className="text-xl font-bold mb-4 text-[#4B0082]">⚡️ Tindakan Cepat</h2>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={handleUndo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↩️ Undo</button>
-                        <button onClick={handleRedo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↪️ Redo</button>
-                        <button onClick={handleResetScores} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Skor</button>
-                        <button onClick={handleResetStakes} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Poin</button>
-                    </div>
-                </div>
-            );
-
-            const Modal = ({ isVisible, onClose, title, children }) => {
-                if (!isVisible) return null;
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
-                        <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                            <h2 className="text-2xl font-bold mb-4 text-center">{title}</h2>
-                            <div className="overflow-y-auto flex-grow">{children}</div>
-                            <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
-                        </div>
-                    </div>
-                );
+            const handleSavePlayers = (editPlayers) => {
+                let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
+                if (validPlayers.length < 2) {
+                    setNotification({message:"Minimal 2 pemain!", type:"error"});
+                    return;
+                }
+                localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
+                setPlayers(validPlayers);
+                let newData = getInitialData(validPlayers);
+                validPlayers.forEach(p => {
+                    if (data && data[p]) newData[p] = {...data[p]};
+                });
+                saveData(newData, false);
+                logHistory(`Edit pemain: ${validPlayers.join(', ')}`);
+                setNotification({message: "✅ Nama & jumlah pemain berhasil diupdate!", type: "success"});
             };
 
-            const DebugModal = () => {
-                if (!debugModalVisible) return null;
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={() => setDebugModalVisible(false)}>
-                        <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                            <h2 className="text-2xl font-bold mb-4 text-center">🐞 Debug Perhitungan Terakhir</h2>
-                            <div className="overflow-y-auto flex-grow text-left text-sm" dangerouslySetInnerHTML={{__html: debugInfo}} />
-                            <button onClick={() => setDebugModalVisible(false)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
-                        </div>
-                    </div>
-                );
-            };
-
-            const ConfirmationModal = () => {
-                const { isOpen, title, message, onConfirm } = confirmModal;
-                if (!isOpen) return null;
-                const handleConfirm = () => {
-                    onConfirm();
-                    setConfirmModal({ isOpen: false });
-                };
-                const handleClose = () => setConfirmModal({ isOpen: false });
-                return (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-                        <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm">
-                            <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
-                            <p className="text-gray-600 mb-6 text-center">{message}</p>
-                            <div className="flex justify-center gap-4">
-                                <button onClick={handleClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Batal</button>
-                                <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">Confirm</button>
-                            </div>
-                        </div>
-                    </div>
-                );
+            const handleSaveStakes = (stakes) => {
+                const newData = JSON.parse(JSON.stringify(data));
+                players.forEach(p => {
+                    // Use Math.round to ensure integer values are saved even if input was float
+                    newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
+                    newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
+                });
+                saveData(newData);
+                setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});
             };
 
             const notificationColors = {
@@ -728,12 +760,30 @@
                          </div>
                     </Modal>
 
-                    {/* Riwayat modal dihapus */}
+                    <DebugModal isVisible={debugModalVisible} onClose={() => setDebugModalVisible(false)} info={debugInfo} />
+                    
+                    <EditScoresModal 
+                        isVisible={editModalVisible} 
+                        onClose={() => setEditModalVisible(false)}
+                        data={data}
+                        players={players}
+                        onSave={handleSaveScores}
+                    />
 
-                    <DebugModal />
-                    <EditModal />
-                    <EditPlayersModal />
-                    <ConfirmationModal />
+                    <EditPlayersModal 
+                        isVisible={editPlayersModalVisible}
+                        onClose={() => setEditPlayersModalVisible(false)}
+                        players={players}
+                        onSave={handleSavePlayers}
+                    />
+                    
+                    <ConfirmationModal 
+                        isOpen={confirmModal.isOpen}
+                        title={confirmModal.title}
+                        message={confirmModal.message}
+                        onConfirm={confirmModal.onConfirm}
+                        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                    />
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-end gap-2 mb-2">
@@ -746,13 +796,30 @@
                                 <p>{notification.message}</p>
                             </div>
                         )}
-                        <ScoreTable />
-                        <WinSection />
-                        <JokerTransferSection />
-                        <ActionsSection />
+                        <ScoreTable data={data} players={players} />
+                        <WinSection 
+                            players={players} 
+                            onUpdateScore={handleUpdateScore} 
+                            onUpdateTeamScore={handleUpdateTeamScore}
+                            setNotification={setNotification}
+                        />
+                        <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
+                        <ActionsSection 
+                            onUndo={handleUndo} 
+                            onRedo={handleRedo} 
+                            onResetScores={handleResetScores} 
+                            onResetStakes={handleResetStakes}
+                        />
                     </div>
-                    {/* Menu bawah baru */}
-                    <SetStakesSection />
+
+                    <EditStakesModal 
+                        isVisible={editStakesModalVisible}
+                        onClose={() => setEditStakesModalVisible(false)}
+                        data={data}
+                        players={players}
+                        onSave={handleSaveStakes}
+                    />
+
                     <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#4B0082] flex justify-around items-center shadow-lg z-50">
                         <button onClick={() => setEditModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Skor">✏️</button>
                         <button onClick={() => setEditPlayersModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Pemain">👥</button>

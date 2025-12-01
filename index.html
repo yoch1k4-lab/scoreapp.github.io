@@ -341,7 +341,7 @@
                 if (data && isVisible) {
                     const obj = {};
                     players.forEach(p => {
-                        obj[p] = data[p].skor.toFixed(2); 
+                        obj[p] = data[p].skor; 
                     });
                     setEditScores(obj);
                 }
@@ -351,16 +351,41 @@
                 onSave(editScores);
             };
 
+            const adjustScore = (player, amount) => {
+                setEditScores(prev => {
+                    const current = parseFloat(prev[player]) || 0;
+                    return { ...prev, [player]: current + amount };
+                });
+            };
+
+            const handleChange = (player, val) => {
+                setEditScores(prev => ({...prev, [player]: val}));
+            };
+
             if (!isVisible) return null;
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-2xl font-bold mb-4 text-center">✏️ Edit Skor Manual (0.5)</h2>
-                        <div className="overflow-y-auto flex-grow">
+                        <h2 className="text-2xl font-bold mb-4 text-center">✏️ Edit Skor Manual</h2>
+                        <div className="overflow-y-auto flex-grow px-1">
                             {players.map(p => (
-                                <div key={p} className="flex items-center mb-4">
-                                    <label className="flex-1 text-base font-bold">{p}</label>
-                                    <input type="number" step="0.5" value={editScores[p] || ''} onChange={e => setEditScores(s => ({...s, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
+                                <div key={p} className="flex items-center mb-4 gap-2">
+                                    <label className="w-16 font-bold truncate text-gray-800">{p}</label>
+                                    <button 
+                                        onClick={() => adjustScore(p, -0.5)}
+                                        className="w-10 h-10 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 active:bg-red-300 flex-shrink-0"
+                                    >-</button>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        value={editScores[p] !== undefined ? editScores[p] : ''} 
+                                        onChange={e => handleChange(p, e.target.value)} 
+                                        className="flex-1 border border-gray-300 rounded-lg p-2 text-center min-w-0"
+                                    />
+                                    <button 
+                                        onClick={() => adjustScore(p, 0.5)}
+                                        className="w-10 h-10 bg-green-100 text-green-600 rounded-lg font-bold hover:bg-green-200 active:bg-green-300 flex-shrink-0"
+                                    >+</button>
                                 </div>
                             ))}
                         </div>
@@ -451,8 +476,8 @@
                     const obj = {};
                     players.forEach(p => {
                         obj[p] = {
-                            n: Math.round(data[p].patokan_normal).toString(),
-                            j: Math.round(data[p].patokan_joker).toString()
+                            n: data[p].patokan_normal,
+                            j: data[p].patokan_joker
                         };
                     });
                     setStakes(obj);
@@ -464,21 +489,64 @@
                 onClose();
             };
 
+            const adjustStake = (player, type, amount) => {
+                setStakes(prev => {
+                    const current = parseInt(prev[player][type]) || 0;
+                    return {
+                        ...prev,
+                        [player]: { ...prev[player], [type]: current + amount }
+                    };
+                });
+            };
+
+            const handleChange = (player, type, val) => {
+                setStakes(prev => ({
+                    ...prev,
+                    [player]: { ...prev[player], [type]: val }
+                }));
+            };
+
             if (!isVisible) return null;
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
-                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-2xl font-bold mb-4 text-center">⚙️ Edit Patokan Poin (Bilangan Bulat)</h2>
-                        <div className="overflow-y-auto flex-grow">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">⚙️ Edit Patokan Poin</h2>
+                        <div className="overflow-y-auto flex-grow px-1">
                             {players.map(p => (
-                                <div key={p} className="flex items-center mb-4">
-                                    <label className="flex-1 text-base font-bold">{p}</label>
-                                    <input type="number" step="1" value={stakes[p]?.n || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], n: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full" placeholder="Normal" />
-                                    <input type="number" step="1" value={stakes[p]?.j || ''} onChange={e => setStakes(s => ({...s, [p]: {...s[p], j: e.target.value}}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full ml-2" placeholder="Joker" />
+                                <div key={p} className="mb-4 border-b border-gray-100 pb-4 last:border-0">
+                                    <div className="font-bold text-lg text-[#4B0082] mb-2">{p}</div>
+                                    
+                                    {/* Normal Row */}
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="w-14 text-sm font-semibold text-gray-600">Normal</span>
+                                        <button onClick={() => adjustStake(p, 'n', -1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">-</button>
+                                        <input 
+                                            type="number" 
+                                            value={stakes[p]?.n ?? ''} 
+                                            onChange={e => handleChange(p, 'n', e.target.value)}
+                                            className="flex-1 border border-gray-300 rounded p-2 text-center min-w-0"
+                                            placeholder="N"
+                                        />
+                                        <button onClick={() => adjustStake(p, 'n', 1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">+</button>
+                                    </div>
+
+                                    {/* Joker Row */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-14 text-sm font-semibold text-gray-600">Joker</span>
+                                        <button onClick={() => adjustStake(p, 'j', -1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">-</button>
+                                        <input 
+                                            type="number" 
+                                            value={stakes[p]?.j ?? ''} 
+                                            onChange={e => handleChange(p, 'j', e.target.value)}
+                                            className="flex-1 border border-gray-300 rounded p-2 text-center min-w-0"
+                                            placeholder="J"
+                                        />
+                                        <button onClick={() => adjustStake(p, 'j', 1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">+</button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={handleSaveStakes} className="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-gray-700 transition-colors">Simpan Patokan</button>
+                        <button onClick={handleSaveStakes} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan Patokan</button>
                         <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
                     </div>
                 </div>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Keeper</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-[#E9E4F5]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- KONFIGURASI URL SCRIPT ---
+        const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
+
+        const { useState, useEffect, useCallback } = React;
+
+        const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
+        const DATA_KEY = '@scoreKeeperData_web';
+        const BACKUP_KEY = '@scoreKeeperBackup_web';
+        const REDO_KEY = '@scoreKeeperRedo_web';
+        const HISTORY_KEY = '@scoreKeeperHistory_web';
+        const PLAYER_KEY = '@scoreKeeperPlayers_web';
+        const SHEETS_KEY = '@scoreKeeperSheets_web'; 
+
+        // --- Initial Data Structure ---
+        const getInitialData = (players = DEFAULT_PLAYERS) => {
+            const data = {};
+            players.forEach(player => {
+                data[player] = { patokan_normal: 0, patokan_joker: 0, skor: 0 };
+            });
+            return data;
+        };
+
+        // --- Utility: Voice (Text-to-Speech) ---
+        const speakText = (text) => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // Stop suara sebelumnya jika masih berjalan
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'id-ID'; // Menggunakan Bahasa Indonesia
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            } else {
+                console.warn("Web Speech API tidak didukung di browser ini.");
+            }
+        };
+
+        // --- Shared Components ---
+
+        const CustomSwitch = ({ value, onValueChange, disabled }) => (
+            <button
+                type="button"
+                onClick={() => !disabled && onValueChange(!value)}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
+                    value ? 'bg-[#5D3FD3]' : 'bg-gray-300'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={disabled}
+            >
+                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    value ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+            </button>
+        );
+
+        const Modal = ({ isVisible, onClose, title, children }) => {
+            if (!isVisible) return null;
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center">{title}</h2>
+                        <div className="overflow-y-auto flex-grow">{children}</div>
+                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfirmationModal = ({ isOpen, title, message, onConfirm, onClose }) => {
+            if (!isOpen) return null;
+            const handleConfirm = () => {
+                onClose(); 
+                onConfirm(); 
+            };
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
+                        <p className="text-gray-600 mb-6 text-center">{message}</p>
+                        <div className="flex justify-center gap-4">
+                            <button onClick={onClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Batal</button>
+                            <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">YA</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
+            const [url, setUrl] = useState(currentUrl || '');
+            const [showTutorial, setShowTutorial] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
+
+            useEffect(() => { 
+                setUrl(currentUrl || ''); 
+            }, [currentUrl, isVisible]);
+
+            const handleSync = async () => {
+                if (!url) { alert("URL belum disetting! Harap isi PREFILLED_SHEET_URL di bagian atas kode index.html."); return; }
+                setIsSyncing(true);
+                await onSync(url);
+                setIsSyncing(false);
+            };
+
+            if (!isVisible) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
+                    <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
+                        
+                        <div className="mb-6 text-center">
+                            <p className="text-sm font-semibold text-gray-700">Status Koneksi:</p>
+                            <p className={`text-sm ${url ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
+                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi di Kode"}
+                            </p>
+                            {url && <p className="text-[10px] text-gray-400 mt-1 break-all mx-4">{url}</p>}
+                        </div>
+
+                        <button 
+                            onClick={handleSync} 
+                            disabled={isSyncing || !url}
+                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                        >
+                            {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
+                        </button>
+
+                        <div className="border-t pt-4 flex-grow overflow-y-auto">
+                            <button onClick={() => setShowTutorial(!showTutorial)} className="text-sm text-blue-600 font-semibold underline mb-2 w-full text-left flex items-center justify-between">
+                                <span>Panduan Integrasi (Klik disini)</span>
+                                <span>{showTutorial ? '▲' : '▼'}</span>
+                            </button>
+                            
+                            {showTutorial && (
+                                <div className="text-xs bg-gray-50 p-3 rounded border border-gray-200">
+                                    <ol className="list-decimal pl-4 space-y-2 text-gray-700">
+                                        <li>Buka Google Sheet baru.</li>
+                                        <li>Klik menu <b>Extensions</b> &gt; <b>Apps Script</b>.</li>
+                                        <li>Hapus semua kode yang ada, lalu <b>Copy & Paste</b> kode di bawah ini:</li>
+                                    </ol>
+                                    <pre className="bg-gray-800 text-green-400 p-2 my-2 rounded overflow-x-auto select-all font-mono text-[10px] leading-relaxed">
+{`function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = JSON.parse(e.postData.contents);
+  var row = [new Date()].concat(data.players.map(p => data.scores[p]));
+  
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["Timestamp"].concat(data.players));
+  }
+  
+  sheet.appendRow(row);
+  return ContentService.createTextOutput("Success");
+}`}
+                                    </pre>
+                                    <ol className="list-decimal pl-4 space-y-2 text-gray-700" start="4">
+                                        <li>Klik tombol <b>Deploy</b> (biru) &gt; <b>New deployment</b>.</li>
+                                        <li>Klik ikon gear/settings &gt; Select type: <b>Web app</b>.</li>
+                                        <li>Isi Description (bebas).</li>
+                                        <li>Execute as: <b>Me</b>.</li>
+                                        <li>Who has access: <b>Anyone</b> (Wajib "Anyone" agar bisa diakses aplikasi ini).</li>
+                                        <li>Klik <b>Deploy</b>, lalu copy <b>Web app URL</b>.</li>
+                                        <li><b>Paste URL tersebut ke dalam variabel PREFILLED_SHEET_URL di bagian paling atas kode file index.html ini.</b></li>
+                                    </ol>
+                                </div>
+                            )}
+                        </div>
+
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">Tutup</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ScoreTable = ({ data, players }) => {
+            if (!data) return <div className="text-center mt-5 text-lg text-gray-600">Loading data...</div>;
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <div className="flex pb-2 border-b-2 border-gray-300">
+                        <p className="flex-[3] text-base font-bold text-black">Pemain</p>
+                        <p className="flex-1 text-base font-bold text-black text-center">N</p>
+                        <p className="flex-1 text-base font-bold text-black text-center">J</p>
+                        <p className="flex-[2] text-base font-bold text-black text-right">Skor</p>
+                    </div>
+                    {players.map(player => {
+                        const info = data[player];
+                        const score = info?.skor ?? 0;
+                        const scoreColor = score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-gray-800';
+                        return(
+                            <div key={player} className="flex items-center py-2.5 border-b border-gray-100 last:border-b-0">
+                                <p className="flex-[3] text-base text-gray-800">{player}</p>
+                                <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
+                                <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
+                                <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
+                                    {score.toFixed(2).replace('.', ',')}
+                                </p>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        const WinSection = ({ players, onUpdateScore, onUpdateTeamScore, setNotification }) => {
+            const [winners, setWinners] = useState([]);
+            const [isJoker, setIsJoker] = useState(false);
+            const [isWin2, setIsWin2] = useState(false);
+            const [jokerHolders, setJokerHolders] = useState([]);
+            const [buyers, setBuyers] = useState({});
+
+            useEffect(() => {
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+            }, [players]);
+
+            const togglePlayer = (p, list, setList) => {
+                setList(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
+            };
+            const resetForm = () => {
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+            };
+            const handleSubmit = () => {
+                if (winners.length === 0 || winners.length > 2) {
+                    setNotification({message: 'Pilih 1 atau 2 pemenang.', type: 'error'}); return;
+                }
+                const parsedBuyers = Object.entries(buyers)
+                    .filter(([,amount]) => amount && !isNaN(parseInt(amount)))
+                    .map(([name, amount]) => ({name, amount: parseInt(amount)}));
+                
+                if (winners.length === 1) {
+                    onUpdateScore(winners[0], isJoker, isWin2, jokerHolders, parsedBuyers);
+                } else {
+                    onUpdateTeamScore(winners, jokerHolders, parsedBuyers);
+                }
+                resetForm();
+            };
+            const possibleLosers = players.filter(p => !winners.includes(p));
+
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🏆 Catat Kemenangan</h2>
+                    <label className="text-base font-semibold mb-2 block text-gray-700">1. Pilih Pemenang (1 atau 2)</label>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {players.map(p => (
+                            <button key={p} onClick={() => togglePlayer(p, winners, setWinners)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${winners.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                        <label className="text-base font-semibold text-gray-700">Menang Joker?</label>
+                        <CustomSwitch value={isJoker} onValueChange={setIsJoker} disabled={winners.length === 2}/>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                        <label className="text-base font-semibold text-gray-700">Menang x2?</label>
+                        <CustomSwitch value={isWin2} onValueChange={setIsWin2} disabled={winners.length === 2}/>
+                    </div>
+                    <label className="text-base font-semibold mt-4 mb-2 block text-gray-700">2. Opsi Tambahan (Opsional)</label>
+                    <p className="text-sm font-medium mb-1 text-gray-600">Penalti Joker (yang kalah)</p>
+                    <div className="flex flex-wrap mb-3 -m-1">
+                        {possibleLosers.map(p

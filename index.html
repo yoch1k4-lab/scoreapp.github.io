@@ -32,81 +32,23 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // ============================================
-        // CONFIGURATION & CONSTANTS
-        // ============================================
-        const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec";
+        // --- KONFIGURASI URL SCRIPT ---
+        // ⚠️ PENTING: Masukkan URL Web App Google Apps Script Anda di sini.
+        // Karena input manual dihilangkan, URL ini WAJIB diisi di sini agar fitur save berfungsi.
+        // Contoh: const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbx.../exec";
+        const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
         const { useState, useEffect, useCallback } = React;
 
-        // Storage Keys - Centralized for easy maintenance
-        const STORAGE_KEYS = {
-            DATA: '@scoreKeeperData_web',
-            BACKUP: '@scoreKeeperBackup_web',
-            REDO: '@scoreKeeperRedo_web',
-            HISTORY: '@scoreKeeperHistory_web',
-            PLAYERS: '@scoreKeeperPlayers_web',
-            SHEETS: '@scoreKeeperSheets_web',
-        };
-
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
+        const DATA_KEY = '@scoreKeeperData_web';
+        const BACKUP_KEY = '@scoreKeeperBackup_web';
+        const REDO_KEY = '@scoreKeeperRedo_web';
+        const HISTORY_KEY = '@scoreKeeperHistory_web';
+        const PLAYER_KEY = '@scoreKeeperPlayers_web';
+        const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
-        // ============================================
-        // CUSTOM HOOKS
-        // ============================================
-
-        /**
-         * Hook for managing notifications with auto-hide
-         */
-        const useNotification = () => {
-            const [notification, setNotificationRaw] = useState({ message: '', type: 'info' });
-
-            const setNotification = useCallback((notif) => {
-                setNotificationRaw(notif);
-                if (notif?.message) {
-                    window.scrollTo(0, 0);
-                    const timeout = setTimeout(() => {
-                        setNotificationRaw({ message: '', type: 'info' });
-                    }, 2000);
-                    return () => clearTimeout(timeout);
-                }
-            }, []);
-
-            return [notification, setNotification];
-        };
-
-        /**
-         * Hook for managing modal visibility - unified into single state object
-         */
-        const useModalState = () => {
-            const [modals, setModals] = useState({
-                help: false,
-                editScores: false,
-                editPlayers: false,
-                editStakes: false,
-                sheets: false,
-                debug: false,
-            });
-
-            const toggle = useCallback((modalName) => {
-                setModals(prev => ({ ...prev, [modalName]: !prev[modalName] }));
-            }, []);
-
-            const open = useCallback((modalName) => {
-                setModals(prev => ({ ...prev, [modalName]: true }));
-            }, []);
-
-            const close = useCallback((modalName) => {
-                setModals(prev => ({ ...prev, [modalName]: false }));
-            }, []);
-
-            return { modals, toggle, open, close };
-        };
-
-        // ============================================
-        // UTILITY FUNCTIONS
-        // ============================================
-
+        // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
             const data = {};
             players.forEach(player => {
@@ -115,30 +57,7 @@
             return data;
         };
 
-        /**
-         * Deep clone without JSON.stringify (safer for edge cases)
-         */
-        const deepClone = (obj) => {
-            if (Array.isArray(obj)) return obj.map(deepClone);
-            if (obj !== null && typeof obj === 'object') {
-                return Object.keys(obj).reduce((acc, key) => {
-                    acc[key] = deepClone(obj[key]);
-                    return acc;
-                }, {});
-            }
-            return obj;
-        };
-
-        /**
-         * Format score for display (2 decimals, comma separator)
-         */
-        const formatScore = (score) => {
-            return typeof score === 'number' ? score.toFixed(2).replace('.', ',') : '0,00';
-        };
-
-        // ============================================
-        // UI COMPONENTS
-        // ============================================
+        // --- Shared Components ---
 
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
@@ -148,7 +67,6 @@
                     value ? 'bg-[#5D3FD3]' : 'bg-gray-300'
                 } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 disabled={disabled}
-                aria-pressed={value}
             >
                 <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
                     value ? 'translate-x-6' : 'translate-x-1'
@@ -163,9 +81,7 @@
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center">{title}</h2>
                         <div className="overflow-y-auto flex-grow">{children}</div>
-                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                            Tutup
-                        </button>
+                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
                     </div>
                 </div>
             );
@@ -174,8 +90,8 @@
         const ConfirmationModal = ({ isOpen, title, message, onConfirm, onClose }) => {
             if (!isOpen) return null;
             const handleConfirm = () => {
-                onClose();
-                onConfirm();
+                onClose(); 
+                onConfirm(); 
             };
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -183,29 +99,29 @@
                         <h2 className="text-xl font-bold mb-2 text-center">{title}</h2>
                         <p className="text-gray-600 mb-6 text-center">{message}</p>
                         <div className="flex justify-center gap-4">
-                            <button onClick={onClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">
-                                Batal
-                            </button>
-                            <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">
-                                YA
-                            </button>
+                            <button onClick={onClose} className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Batal</button>
+                            <button onClick={handleConfirm} className="flex-1 bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">YA</button>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSync }) => {
-            const [isSyncing, setIsSyncing] = useState(false);
+        // --- NEW COMPONENT: Google Sheets Modal ---
+        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
+            const [url, setUrl] = useState(currentUrl || '');
             const [showTutorial, setShowTutorial] = useState(false);
+            const [isSyncing, setIsSyncing] = useState(false);
+
+            // Update local state when prop changes
+            useEffect(() => { 
+                setUrl(currentUrl || ''); 
+            }, [currentUrl, isVisible]);
 
             const handleSync = async () => {
-                if (!currentUrl) {
-                    alert("URL belum disetting! Harap isi PREFILLED_SHEET_URL di bagian atas kode index.html.");
-                    return;
-                }
+                if (!url) { alert("URL belum disetting! Harap isi PREFILLED_SHEET_URL di bagian atas kode index.html."); return; }
                 setIsSyncing(true);
-                await onSync(currentUrl);
+                await onSync(url);
                 setIsSyncing(false);
             };
 
@@ -215,34 +131,30 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
-
+                        
+                        {/* Status Display menggantikan Input */}
                         <div className="mb-6 text-center">
                             <p className="text-sm font-semibold text-gray-700">Status Koneksi:</p>
-                            <p className={`text-sm ${currentUrl ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
-                                {currentUrl ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi"}
+                            <p className={`text-sm ${url ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
+                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi di Kode"}
                             </p>
-                            {currentUrl && <p className="text-[10px] text-gray-400 mt-1 break-all mx-4">{currentUrl}</p>}
+                            {url && <p className="text-[10px] text-gray-400 mt-1 break-all mx-4">{url}</p>}
                         </div>
 
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing || !currentUrl}
-                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${
-                                isSyncing || !currentUrl ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
-                            }`}
+                        <button 
+                            onClick={handleSync} 
+                            disabled={isSyncing || !url}
+                            className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
                         >
                             {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
                         </button>
 
                         <div className="border-t pt-4 flex-grow overflow-y-auto">
-                            <button
-                                onClick={() => setShowTutorial(!showTutorial)}
-                                className="text-sm text-blue-600 font-semibold underline mb-2 w-full text-left flex items-center justify-between"
-                            >
+                            <button onClick={() => setShowTutorial(!showTutorial)} className="text-sm text-blue-600 font-semibold underline mb-2 w-full text-left flex items-center justify-between">
                                 <span>Panduan Integrasi (Klik disini)</span>
                                 <span>{showTutorial ? '▲' : '▼'}</span>
                             </button>
-
+                            
                             {showTutorial && (
                                 <div className="text-xs bg-gray-50 p-3 rounded border border-gray-200">
                                     <ol className="list-decimal pl-4 space-y-2 text-gray-700">
@@ -271,15 +183,13 @@
                                         <li>Execute as: <b>Me</b>.</li>
                                         <li>Who has access: <b>Anyone</b> (Wajib "Anyone" agar bisa diakses aplikasi ini).</li>
                                         <li>Klik <b>Deploy</b>, lalu copy <b>Web app URL</b>.</li>
-                                        <li><b>Paste URL tersebut ke dalam variabel PREFILLED_SHEET_URL di bagian atas kode file index.html ini.</b></li>
+                                        <li><b>Paste URL tersebut ke dalam variabel PREFILLED_SHEET_URL di bagian paling atas kode file index.html ini.</b></li>
                                     </ol>
                                 </div>
                             )}
                         </div>
 
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">
-                            Tutup
-                        </button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">Tutup</button>
                     </div>
                 </div>
             );
@@ -299,13 +209,13 @@
                         const info = data[player];
                         const score = info?.skor ?? 0;
                         const scoreColor = score > 0 ? 'text-green-600' : score < 0 ? 'text-red-600' : 'text-gray-800';
-                        return (
+                        return(
                             <div key={player} className="flex items-center py-2.5 border-b border-gray-100 last:border-b-0">
                                 <p className="flex-[3] text-base text-gray-800">{player}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
                                 <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
-                                    {formatScore(score)}
+                                    {score.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
                         );
@@ -322,35 +232,25 @@
             const [buyers, setBuyers] = useState({});
 
             useEffect(() => {
-                setBuyers(players.reduce((acc, p) => ({ ...acc, [p]: '' }), {}));
-                setWinners([]);
-                setIsJoker(false);
-                setIsWin2(false);
-                setJokerHolders([]);
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
             }, [players]);
 
             const togglePlayer = (p, list, setList) => {
                 setList(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
             };
-
             const resetForm = () => {
-                setWinners([]);
-                setIsJoker(false);
-                setIsWin2(false);
-                setJokerHolders([]);
-                setBuyers(players.reduce((acc, p) => ({ ...acc, [p]: '' }), {}));
+                setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+                setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
             };
-
             const handleSubmit = () => {
                 if (winners.length === 0 || winners.length > 2) {
-                    setNotification({ message: 'Pilih 1 atau 2 pemenang.', type: 'error' });
-                    return;
+                    setNotification({message: 'Pilih 1 atau 2 pemenang.', type: 'error'}); return;
                 }
-
                 const parsedBuyers = Object.entries(buyers)
-                    .filter(([, amount]) => amount && !isNaN(parseInt(amount)))
-                    .map(([name, amount]) => ({ name, amount: parseInt(amount) }));
-
+                    .filter(([,amount]) => amount && !isNaN(parseInt(amount)))
+                    .map(([name, amount]) => ({name, amount: parseInt(amount)}));
+                
                 if (winners.length === 1) {
                     onUpdateScore(winners[0], isJoker, isWin2, jokerHolders, parsedBuyers);
                 } else {
@@ -358,7 +258,6 @@
                 }
                 resetForm();
             };
-
             const possibleLosers = players.filter(p => !winners.includes(p));
 
             return (
@@ -367,40 +266,24 @@
                     <label className="text-base font-semibold mb-2 block text-gray-700">1. Pilih Pemenang (1 atau 2)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
                         {players.map(p => (
-                            <button
-                                key={p}
-                                onClick={() => togglePlayer(p, winners, setWinners)}
-                                className={`py-2 px-4 rounded-full m-1 border transition-colors ${
-                                    winners.includes(p)
-                                        ? 'bg-[#5D3FD3] border-[#4B0082] text-white'
-                                        : 'bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200'
-                                }`}
-                            >
+                            <button key={p} onClick={() => togglePlayer(p, winners, setWinners)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${winners.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
                                 {p}
                             </button>
                         ))}
                     </div>
                     <div className="flex justify-between items-center py-2">
                         <label className="text-base font-semibold text-gray-700">Menang Joker?</label>
-                        <CustomSwitch value={isJoker} onValueChange={setIsJoker} disabled={winners.length === 2} />
+                        <CustomSwitch value={isJoker} onValueChange={setIsJoker} disabled={winners.length === 2}/>
                     </div>
                     <div className="flex justify-between items-center py-2">
                         <label className="text-base font-semibold text-gray-700">Menang x2?</label>
-                        <CustomSwitch value={isWin2} onValueChange={setIsWin2} disabled={winners.length === 2} />
+                        <CustomSwitch value={isWin2} onValueChange={setIsWin2} disabled={winners.length === 2}/>
                     </div>
                     <label className="text-base font-semibold mt-4 mb-2 block text-gray-700">2. Opsi Tambahan (Opsional)</label>
                     <p className="text-sm font-medium mb-1 text-gray-600">Penalti Joker (yang kalah)</p>
                     <div className="flex flex-wrap mb-3 -m-1">
                         {possibleLosers.map(p => (
-                            <button
-                                key={p}
-                                onClick={() => togglePlayer(p, jokerHolders, setJokerHolders)}
-                                className={`py-2 px-4 rounded-full m-1 border transition-colors ${
-                                    jokerHolders.includes(p)
-                                        ? 'bg-[#5D3FD3] border-[#4B0082] text-white'
-                                        : 'bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200'
-                                }`}
-                            >
+                            <button key={p} onClick={() => togglePlayer(p, jokerHolders, setJokerHolders)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${jokerHolders.includes(p) ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
                                 {p} -j
                             </button>
                         ))}
@@ -410,19 +293,11 @@
                         {players.map(p => (
                             <div key={p} className="flex items-center">
                                 <label className="flex-1 text-base">{p} buy:</label>
-                                <input
-                                    type="number"
-                                    placeholder="0"
-                                    value={buyers[p] || ''}
-                                    onChange={e => setBuyers(prev => ({ ...prev, [p]: e.target.value }))}
-                                    className="flex-1 border border-gray-300 rounded-lg p-2 text-center max-w-20"
-                                />
+                                <input type="number" placeholder="0" value={buyers[p] || ''} onChange={e => setBuyers(prev => ({...prev, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
                             </div>
                         ))}
                     </div>
-                    <button onClick={handleSubmit} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                        Submit Kemenangan
-                    </button>
+                    <button onClick={handleSubmit} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Submit Kemenangan</button>
                 </div>
             );
         };
@@ -430,50 +305,19 @@
         const JokerTransferSection = ({ players, onJokerTransfer }) => {
             const [gainer, setGainer] = useState(null);
             const [loser, setLoser] = useState(null);
-
-            useEffect(() => {
-                setGainer(null);
-                setLoser(null);
-            }, [players]);
-
+            useEffect(() => {setGainer(null);setLoser(null);}, [players]);
             return (
                 <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
                     <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🃏 Transfer Joker</h2>
                     <label className="text-base font-semibold mb-2 block text-gray-700">Penerima (dapat poin)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
-                        {players.map(p => (
-                            <button
-                                key={p}
-                                onClick={() => setGainer(p)}
-                                className={`py-2 px-4 rounded-full m-1 border transition-colors ${
-                                    gainer === p
-                                        ? 'bg-[#5D3FD3] border-[#4B0082] text-white'
-                                        : 'bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200'
-                                }`}
-                            >
-                                {p}
-                            </button>
-                        ))}
+                        {players.map(p => ( <button key={p} onClick={() => setGainer(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${gainer === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
                     </div>
                     <label className="text-base font-semibold mb-2 block text-gray-700">Pemberi (kena penalti)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
-                        {players.map(p => (
-                            <button
-                                key={p}
-                                onClick={() => setLoser(p)}
-                                className={`py-2 px-4 rounded-full m-1 border transition-colors ${
-                                    loser === p
-                                        ? 'bg-[#5D3FD3] border-[#4B0082] text-white'
-                                        : 'bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200'
-                                }`}
-                            >
-                                {p}
-                            </button>
-                        ))}
+                        {players.map(p => ( <button key={p} onClick={() => setLoser(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${loser === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
                     </div>
-                    <button onClick={() => onJokerTransfer(gainer, loser)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                        Transfer Joker
-                    </button>
+                    <button onClick={() => onJokerTransfer(gainer, loser)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Transfer</button>
                 </div>
             );
         };
@@ -482,18 +326,10 @@
             <div className="bg-white rounded-xl p-4 shadow-md">
                 <h2 className="text-xl font-bold mb-4 text-[#4B0082]">⚡️ Tindakan Cepat</h2>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={onUndo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">
-                        ↩️ Undo
-                    </button>
-                    <button onClick={onRedo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">
-                        ↪️ Redo
-                    </button>
-                    <button onClick={onResetScores} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">
-                        Reset Skor
-                    </button>
-                    <button onClick={onResetStakes} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">
-                        Reset Poin
-                    </button>
+                    <button onClick={onUndo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↩️ Undo</button>
+                    <button onClick={onRedo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↪️ Redo</button>
+                    <button onClick={onResetScores} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Skor</button>
+                    <button onClick={onResetStakes} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Poin</button>
                 </div>
             </div>
         );
@@ -505,11 +341,15 @@
                 if (data && isVisible) {
                     const obj = {};
                     players.forEach(p => {
-                        obj[p] = data[p].skor;
+                        obj[p] = data[p].skor; 
                     });
                     setEditScores(obj);
                 }
             }, [data, isVisible, players]);
+
+            const handleSave = () => {
+                onSave(editScores);
+            };
 
             const adjustScore = (player, amount) => {
                 setEditScores(prev => {
@@ -518,8 +358,11 @@
                 });
             };
 
-            if (!isVisible) return null;
+            const handleChange = (player, val) => {
+                setEditScores(prev => ({...prev, [player]: val}));
+            };
 
+            if (!isVisible) return null;
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
@@ -528,34 +371,26 @@
                             {players.map(p => (
                                 <div key={p} className="flex items-center mb-4 gap-2">
                                     <label className="w-16 font-bold truncate text-gray-800">{p}</label>
-                                    <button
+                                    <button 
                                         onClick={() => adjustScore(p, -0.5)}
                                         className="w-10 h-10 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 active:bg-red-300 flex-shrink-0"
-                                    >
-                                        -
-                                    </button>
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        value={editScores[p] !== undefined ? editScores[p] : ''}
-                                        onChange={e => setEditScores(prev => ({ ...prev, [p]: e.target.value }))}
+                                    >-</button>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        value={editScores[p] !== undefined ? editScores[p] : ''} 
+                                        onChange={e => handleChange(p, e.target.value)} 
                                         className="flex-1 border border-gray-300 rounded-lg p-2 text-center min-w-0"
                                     />
-                                    <button
+                                    <button 
                                         onClick={() => adjustScore(p, 0.5)}
                                         className="w-10 h-10 bg-green-100 text-green-600 rounded-lg font-bold hover:bg-green-200 active:bg-green-300 flex-shrink-0"
-                                    >
-                                        +
-                                    </button>
+                                    >+</button>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => onSave(editScores)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                            Simpan
-                        </button>
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">
-                            Batal
-                        </button>
+                        <button onClick={handleSave} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
                     </div>
                 </div>
             );
@@ -566,7 +401,7 @@
             const [numPlayers, setNumPlayers] = useState(2);
 
             useEffect(() => {
-                if (isVisible) {
+                if(isVisible) {
                     setEditPlayers([...players]);
                     setNumPlayers(players.length);
                 }
@@ -574,12 +409,12 @@
 
             const updatePlayerCount = (newCount) => {
                 if (newCount < 2 || newCount > 8) return;
-
+                
                 setNumPlayers(newCount);
                 let newPlayers = [...editPlayers];
                 if (newCount > newPlayers.length) {
                     for (let i = newPlayers.length; i < newCount; i++) {
-                        newPlayers.push(`Player${i + 1}`);
+                        newPlayers.push(`Player${i+1}`);
                     }
                 } else {
                     newPlayers = newPlayers.slice(0, newCount);
@@ -587,8 +422,12 @@
                 setEditPlayers(newPlayers);
             };
 
-            if (!isVisible) return null;
+            const handleSavePlayers = () => {
+                onSave(editPlayers);
+                onClose();
+            };
 
+            if (!isVisible) return null;
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
@@ -596,47 +435,34 @@
                         <div className="mb-6">
                             <label className="block font-semibold mb-2 text-center text-gray-700">Jumlah Pemain</label>
                             <div className="flex items-center justify-center gap-6">
-                                <button
+                                <button 
                                     onClick={() => updatePlayerCount(numPlayers - 1)}
                                     disabled={numPlayers <= 2}
-                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                    -
-                                </button>
+                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                >-</button>
                                 <span className="text-3xl font-bold text-[#4B0082] w-12 text-center">{numPlayers}</span>
-                                <button
+                                <button 
                                     onClick={() => updatePlayerCount(numPlayers + 1)}
                                     disabled={numPlayers >= 8}
-                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                    +
-                                </button>
+                                    className="w-12 h-12 rounded-full bg-gray-200 text-[#4B0082] text-2xl font-bold flex items-center justify-center hover:bg-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                >+</button>
                             </div>
                         </div>
 
                         <div className="overflow-y-auto flex-grow">
-                            {Array.from({ length: numPlayers }).map((_, idx) => (
+                            {Array.from({length: numPlayers}).map((_, idx) => (
                                 <div key={idx} className="flex items-center mb-3">
-                                    <label className="w-12 text-base font-bold text-gray-700">{idx + 1}.</label>
-                                    <input
-                                        type="text"
-                                        value={editPlayers[idx] || ''}
-                                        onChange={e => {
-                                            const arr = [...editPlayers];
-                                            arr[idx] = e.target.value;
-                                            setEditPlayers(arr);
-                                        }}
-                                        className="flex-1 border border-gray-300 rounded-lg p-2 text-center"
-                                    />
+                                    <label className="w-12 text-base font-bold text-gray-700">{idx+1}.</label>
+                                    <input type="text" value={editPlayers[idx] || ""} onChange={e => {
+                                        const arr = [...editPlayers];
+                                        arr[idx] = e.target.value;
+                                        setEditPlayers(arr);
+                                    }} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => onSave(editPlayers)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                            Simpan
-                        </button>
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">
-                            Batal
-                        </button>
+                        <button onClick={handleSavePlayers} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
                     </div>
                 </div>
             );
@@ -651,25 +477,36 @@
                     players.forEach(p => {
                         obj[p] = {
                             n: data[p].patokan_normal,
-                            j: data[p].patokan_joker,
+                            j: data[p].patokan_joker
                         };
                     });
                     setStakes(obj);
                 }
             }, [data, isVisible, players]);
 
+            const handleSaveStakes = () => {
+                onSave(stakes);
+                onClose();
+            };
+
             const adjustStake = (player, type, amount) => {
                 setStakes(prev => {
                     const current = parseInt(prev[player][type]) || 0;
                     return {
                         ...prev,
-                        [player]: { ...prev[player], [type]: current + amount },
+                        [player]: { ...prev[player], [type]: current + amount }
                     };
                 });
             };
 
-            if (!isVisible) return null;
+            const handleChange = (player, type, val) => {
+                setStakes(prev => ({
+                    ...prev,
+                    [player]: { ...prev[player], [type]: val }
+                }));
+            };
 
+            if (!isVisible) return null;
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
@@ -678,61 +515,39 @@
                             {players.map(p => (
                                 <div key={p} className="mb-4 border-b border-gray-100 pb-4 last:border-0">
                                     <div className="font-bold text-lg text-[#4B0082] mb-2">{p}</div>
-
+                                    
+                                    {/* Normal Row */}
                                     <div className="flex items-center gap-2 mb-2">
                                         <span className="w-14 text-sm font-semibold text-gray-600">Normal</span>
-                                        <button
-                                            onClick={() => adjustStake(p, 'n', -1)}
-                                            className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0"
-                                        >
-                                            -
-                                        </button>
-                                        <input
-                                            type="number"
-                                            value={stakes[p]?.n ?? ''}
-                                            onChange={e => setStakes(prev => ({ ...prev, [p]: { ...prev[p], n: e.target.value } }))}
+                                        <button onClick={() => adjustStake(p, 'n', -1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">-</button>
+                                        <input 
+                                            type="number" 
+                                            value={stakes[p]?.n ?? ''} 
+                                            onChange={e => handleChange(p, 'n', e.target.value)}
                                             className="flex-1 border border-gray-300 rounded p-2 text-center min-w-0"
                                             placeholder="N"
                                         />
-                                        <button
-                                            onClick={() => adjustStake(p, 'n', 1)}
-                                            className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0"
-                                        >
-                                            +
-                                        </button>
+                                        <button onClick={() => adjustStake(p, 'n', 1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">+</button>
                                     </div>
 
+                                    {/* Joker Row */}
                                     <div className="flex items-center gap-2">
                                         <span className="w-14 text-sm font-semibold text-gray-600">Joker</span>
-                                        <button
-                                            onClick={() => adjustStake(p, 'j', -1)}
-                                            className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0"
-                                        >
-                                            -
-                                        </button>
-                                        <input
-                                            type="number"
-                                            value={stakes[p]?.j ?? ''}
-                                            onChange={e => setStakes(prev => ({ ...prev, [p]: { ...prev[p], j: e.target.value } }))}
+                                        <button onClick={() => adjustStake(p, 'j', -1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">-</button>
+                                        <input 
+                                            type="number" 
+                                            value={stakes[p]?.j ?? ''} 
+                                            onChange={e => handleChange(p, 'j', e.target.value)}
                                             className="flex-1 border border-gray-300 rounded p-2 text-center min-w-0"
                                             placeholder="J"
                                         />
-                                        <button
-                                            onClick={() => adjustStake(p, 'j', 1)}
-                                            className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0"
-                                        >
-                                            +
-                                        </button>
+                                        <button onClick={() => adjustStake(p, 'j', 1)} className="w-10 h-10 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold flex-shrink-0">+</button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => onSave(stakes)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                            Simpan Patokan
-                        </button>
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">
-                            Batal
-                        </button>
+                        <button onClick={handleSaveStakes} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Simpan Patokan</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Batal</button>
                     </div>
                 </div>
             );
@@ -744,151 +559,147 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[80vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center">🐞 Debug Perhitungan Terakhir</h2>
-                        <div className="overflow-y-auto flex-grow text-left text-sm" dangerouslySetInnerHTML={{ __html: info }} />
-                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">
-                            Tutup
-                        </button>
+                        <div className="overflow-y-auto flex-grow text-left text-sm" dangerouslySetInnerHTML={{__html: info}} />
+                        <button onClick={onClose} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Tutup</button>
                     </div>
                 </div>
             );
         };
 
-        // ============================================
-        // MAIN APP COMPONENT
-        // ============================================
+        // --- Main App Component ---
 
         const App = () => {
-            // State Management with localStorage
-            const [players, setPlayers] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEYS.PLAYERS);
-                    return saved ? JSON.parse(saved) : DEFAULT_PLAYERS;
-                } catch (e) {
-                    return DEFAULT_PLAYERS;
-                }
-            });
-
-            const [data, setData] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEYS.DATA);
-                    return saved ? JSON.parse(saved) : getInitialData(players);
-                } catch (e) {
-                    return getInitialData(players);
-                }
-            });
-
-            const [notification, setNotification] = useNotification();
-            const { modals, open, close } = useModalState();
-            const [sheetUrl, setSheetUrl] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEYS.SHEETS);
-                    return saved || PREFILLED_SHEET_URL || '';
-                } catch (e) {
-                    return PREFILLED_SHEET_URL || '';
-                }
-            });
-
-            const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+            const [players, setPlayers] = useState(DEFAULT_PLAYERS);
+            const [data, setData] = useState(null);
+            const [notification, setNotificationRaw] = useState({ message: 'Welcome! Use the Help menu to start.', type: 'info' });
+            
+            const [helpModalVisible, setHelpModalVisible] = useState(false);
+            const [editModalVisible, setEditModalVisible] = useState(false);
+            const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
+            const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
+            const [sheetModalVisible, setSheetModalVisible] = useState(false); 
+            const [debugModalVisible, setDebugModalVisible] = useState(false);
             const [debugInfo, setDebugInfo] = useState(null);
-            const [backup, setBackup] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEYS.BACKUP);
-                    return saved ? JSON.parse(saved) : null;
-                } catch (e) {
-                    return null;
+            const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+            
+            // Sheets Integration State - PRIORITIZE PREFILLED
+            const [sheetUrl, setSheetUrl] = useState('');
+
+            const setNotification = useCallback((notif) => {
+                setNotificationRaw(notif);
+                if (notif && notif.message) {
+                    window.scrollTo(0, 0); 
+                    setTimeout(() => {
+                        setNotificationRaw({ message: '', type: notif.type || 'info' });
+                    }, 2000);
                 }
-            });
-            const [redo, setRedo] = useState(() => {
+            }, []);
+
+            useEffect(() => {
                 try {
-                    const saved = localStorage.getItem(STORAGE_KEYS.REDO);
-                    return saved ? JSON.parse(saved) : null;
-                } catch (e) {
-                    return null;
-                }
-            });
-
-            // Persist state changes to localStorage
-            useEffect(() => {
-                localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
-            }, [players]);
-
-            useEffect(() => {
-                localStorage.setItem(STORAGE_KEYS.DATA, JSON.stringify(data));
-            }, [data]);
-
-            useEffect(() => {
-                if (backup) localStorage.setItem(STORAGE_KEYS.BACKUP, JSON.stringify(backup));
-            }, [backup]);
-
-            useEffect(() => {
-                if (redo) localStorage.setItem(STORAGE_KEYS.REDO, JSON.stringify(redo));
-            }, [redo]);
-
-            const saveData = useCallback((newData, shouldBackup = true) => {
-                try {
-                    if (shouldBackup && data) {
-                        setBackup(deepClone(data));
-                        setRedo(null);
+                    const jsonPlayers = localStorage.getItem(PLAYER_KEY);
+                    if (jsonPlayers) {
+                        setPlayers(JSON.parse(jsonPlayers));
                     }
+                } catch (e) {}
+            }, []);
+
+            useEffect(() => {
+                try {
+                    const jsonPlayers = localStorage.getItem(PLAYER_KEY);
+                    const loadedPlayers = jsonPlayers ? JSON.parse(jsonPlayers) : DEFAULT_PLAYERS;
+                    setPlayers(loadedPlayers);
+                    const jsonData = localStorage.getItem(DATA_KEY);
+                    setData(jsonData ? JSON.parse(jsonData) : getInitialData(loadedPlayers));
+                    
+                    // Load Sheets URL with fallback to PREFILLED
+                    const savedSheetUrl = localStorage.getItem(SHEETS_KEY);
+                    setSheetUrl(savedSheetUrl || PREFILLED_SHEET_URL || '');
+                } catch (e) {
+                    setPlayers(DEFAULT_PLAYERS);
+                    setData(getInitialData(DEFAULT_PLAYERS));
+                }
+            }, []);
+
+            const saveData = useCallback((newData, backupCurrent = true) => {
+                try {
+                    if (backupCurrent && data) {
+                        localStorage.setItem(BACKUP_KEY, JSON.stringify(data));
+                        localStorage.removeItem(REDO_KEY);
+                    }
+                    localStorage.setItem(DATA_KEY, JSON.stringify(newData));
                     setData(newData);
-                } catch (error) {
-                    console.error('Error saving data:', error);
+                } catch (e) {
                     setNotification({ message: 'Error saving data!', type: 'error' });
                 }
             }, [data, setNotification]);
 
+            // --- Sheets Logic ---
+            const handleSaveSheetUrl = (url) => {
+                setSheetUrl(url);
+                localStorage.setItem(SHEETS_KEY, url);
+            };
+
             const handleSyncToSheets = async (targetUrl) => {
                 if (!data) return;
-
+                
+                // Prepare Payload
                 const scoresMap = {};
-                players.forEach(p => (scoresMap[p] = data[p].skor));
-
+                players.forEach(p => scoresMap[p] = data[p].skor);
+                
                 const payload = {
                     players: players,
-                    scores: scoresMap,
+                    scores: scoresMap
                 };
 
                 try {
+                    // Note: 'no-cors' mode is used because GAS Web Apps don't always send CORS headers for simple POSTs
+                    // This means we won't see the response content, but the data will be sent.
                     await fetch(targetUrl, {
                         method: 'POST',
-                        mode: 'no-cors',
+                        mode: 'no-cors', 
                         headers: {
-                            'Content-Type': 'application/json',
+                            'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(payload),
+                        body: JSON.stringify(payload)
                     });
                     setNotification({ message: '✅ Data terkirim ke Google Sheet!', type: 'success' });
-                    close('sheets');
+                    setSheetModalVisible(false);
                 } catch (error) {
                     console.error(error);
                     setNotification({ message: '❌ Gagal mengirim. Cek URL atau koneksi.', type: 'error' });
                 }
             };
 
+            const logHistory = useCallback((text) => {
+                const time = new Date().toLocaleString('id-ID', { hour12: false });
+                const newEntry = `[${time}] ${text}`;
+                const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                const updatedHistory = [newEntry, ...currentHistory].slice(50);
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+            }, []);
+
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
                 if (!data) return;
-                const newData = deepClone(data);
-                const key = isJoker ? 'patokan_joker' : 'patokan_normal';
+                const newData = JSON.parse(JSON.stringify(data));
+                const winnerCap = winner;
 
-                // Validate stakes are set
+                const key = isJoker ? 'patokan_joker' : 'patokan_normal';
                 for (const p of players) {
                     if (newData[p][key] <= 0) {
-                        setNotification({
-                            message: `⚠️ Gagal! ${p} belum set nilai ${isJoker ? 'Joker' : 'Normal'}.`,
-                            type: 'error',
-                        });
+                        setNotification({message: `⚠️ Gagal! ${p} belum set nilai ${isJoker ? 'Joker' : 'Normal'}.`, type: 'error'});
                         return;
                     }
                 }
 
-                const losers = players.filter(p => p !== winner);
+                const losers = players.filter(p => p !== winnerCap);
                 let totalLoss = 0;
 
                 losers.forEach(loser => {
                     const normalStake = newData[loser].patokan_normal;
                     const jokerStake = newData[loser].patokan_joker;
                     let baseLoss = newData[loser][key];
-                    let jokerPenaltyCalc = jokerHolders.includes(loser) ? jokerStake - normalStake : 0;
+                    let jokerPenaltyCalc = jokerHolders.includes(loser) ? (jokerStake - normalStake) : 0;
                     const buyerInfo = buyers.find(b => b.name === loser);
                     let buyPenaltyCalc = buyerInfo ? buyerInfo.amount * normalStake : 0;
                     let loss = baseLoss + jokerPenaltyCalc + buyPenaltyCalc;
@@ -897,77 +708,54 @@
                     totalLoss += loss;
                 });
 
-                newData[winner].skor += totalLoss;
+                newData[winnerCap].skor += totalLoss;
 
-                // Validate total
                 const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
-                    setNotification({
-                        message: `❌ Perubahan dibatalkan! Total skor tidak seimbang (${totalCheck.toFixed(2)}).`,
-                        type: 'error',
-                    });
+                    setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang (${totalCheck.toFixed(2)}).`, type: 'error' });
                     return;
                 }
 
                 saveData(newData);
-                let logMsg = `${winner} menang ronde ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' (x2)' : ''} (+${totalLoss.toFixed(2)})`;
+                let logMsg = `${winnerCap} menang ronde ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' (x2)' : ''} (+${totalLoss.toFixed(2)})`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
                 if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {
                 if (!data) return;
-                let newData = deepClone(data);
-
-                // Validate
+                let newData = JSON.parse(JSON.stringify(data));
                 for (const p of players) {
                     if (newData[p].patokan_normal <= 0) {
-                        setNotification({
-                            message: `⚠️ Gagal! ${p} belum set nilai Normal.`,
-                            type: 'error',
-                        });
+                        setNotification({ message: `⚠️ Gagal! ${p} belum set nilai Normal.`, type: 'error' });
                         return;
                     }
                 }
-
                 const losers = players.filter(p => !winners.includes(p));
                 const winnerBuyers = buyers.filter(b => winners.includes(b.name));
                 const loserBuyers = buyers.filter(b => losers.includes(b.name));
-
                 if (winnerBuyers.length > 1) {
-                    setNotification({
-                        message: `❌ Hanya satu pemenang yang boleh buy.`,
-                        type: 'error',
-                    });
+                    setNotification({ message: `❌ Hanya satu pemenang yang boleh buy.`, type: 'error' });
                     return;
                 }
-
                 const totalNormalStake = players.reduce((sum, p) => sum + newData[p].patokan_normal, 0);
                 const baseChange = totalNormalStake / players.length;
                 let totalJokerPenalty = 0;
-                jokerHolders.forEach(jh => {
-                    totalJokerPenalty += newData[jh].patokan_joker - newData[jh].patokan_normal;
-                });
+                jokerHolders.forEach(jh => { totalJokerPenalty += newData[jh].patokan_joker - newData[jh].patokan_normal; });
                 let totalLoserBuyPenalty = 0;
-                loserBuyers.forEach(b => {
-                    totalLoserBuyPenalty += b.amount * newData[b.name].patokan_normal;
-                });
-
+                loserBuyers.forEach(b => { totalLoserBuyPenalty += b.amount * newData[b.name].patokan_normal; });
                 losers.forEach(loser => {
                     let currentLoss = baseChange;
-                    const jokerPenaltyCalc = jokerHolders.includes(loser)
-                        ? newData[loser].patokan_joker - newData[loser].patokan_normal
-                        : 0;
+                    const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
                     const buyPenaltyCalc = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
                     currentLoss += jokerPenaltyCalc + buyPenaltyCalc;
                     newData[loser].skor -= currentLoss;
                 });
-
                 const totalGainFromLosers = totalJokerPenalty + totalLoserBuyPenalty;
-                const baseGainPerWinner = baseChange + totalGainFromLosers / winners.length;
-
+                const baseGainPerWinner = baseChange + (totalGainFromLosers / winners.length);
                 if (winnerBuyers.length === 1 && winners.length === 2) {
                     const winnerBuyer = winnerBuyers[0];
                     const otherWinner = winners.find(w => w !== winnerBuyer.name);
@@ -975,40 +763,30 @@
                     newData[winnerBuyer.name].skor += baseGainPerWinner - transferAmount;
                     newData[otherWinner].skor += baseGainPerWinner + transferAmount;
                 } else {
-                    winners.forEach(winner => {
-                        newData[winner].skor += baseGainPerWinner;
-                    });
+                    winners.forEach(winner => { newData[winner].skor += baseGainPerWinner; });
                 }
-
-                // Validate
                 const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
-                    setNotification({
-                        message: `❌ Perubahan dibatalkan! Total skor tidak seimbang (${totalCheck.toFixed(2)}).`,
-                        type: 'error',
-                    });
+                    setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang (${totalCheck.toFixed(2)}).`, type: 'error' });
                     return;
                 }
-
                 saveData(newData);
                 let logMsg = `Tim ${winners.join(' & ')} menang`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
                 if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
             };
 
             const handleJokerTransfer = (gainer, loser) => {
                 if (!data) return;
                 if (!gainer || !loser || gainer === loser) {
-                    setNotification({ message: 'Pilih 2 pemain yang berbeda.', type: 'error' });
+                    setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'});
                     return;
                 }
-                const newData = deepClone(data);
+                const newData = JSON.parse(JSON.stringify(data));
                 if (newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
-                    setNotification({
-                        message: `⚠️ Gagal! ${loser} belum set patokan.`,
-                        type: 'error',
-                    });
+                    setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'});
                     return;
                 }
                 const transferAmount = newData[loser].patokan_joker - newData[loser].patokan_normal;
@@ -1016,85 +794,95 @@
                 newData[loser].skor -= transferAmount;
                 saveData(newData);
                 const logMsg = `Transfer joker dari ${loser} ke ${gainer} (${transferAmount.toFixed(2)} poin)`;
+                logHistory(logMsg);
                 setNotification({ message: `🃏 ${logMsg}`, type: 'success' });
             };
 
             const handleResetScores = () => {
                 setConfirmModal({
                     isOpen: true,
-                    title: 'Reset Skor?',
-                    message: 'Apakah Anda yakin ingin mereset semua skor pemain ke 0?',
+                    title: "Reset Skor?",
+                    message: "Apakah Anda yakin ingin mereset semua skor pemain ke 0?",
                     onConfirm: () => {
                         if (!data) return;
-                        const newData = deepClone(data);
+                        const newData = JSON.parse(JSON.stringify(data));
                         players.forEach(p => (newData[p].skor = 0));
                         saveData(newData);
-                        setNotification({ message: '🔄 Semua skor berhasil direset ke 0.', type: 'success' });
-                    },
+                        logHistory("Semua skor direset ke 0.");
+                        setNotification({ message: "🔄 Semua skor berhasil direset ke 0.", type: 'success' });
+                    }
                 });
             };
 
             const handleResetStakes = () => {
                 setConfirmModal({
                     isOpen: true,
-                    title: 'Reset Poin?',
-                    message: 'Apakah Anda yakin ingin mereset semua patokan poin (N & J) ke 0?',
+                    title: "Reset Poin?",
+                    message: "Apakah Anda yakin ingin mereset semua patokan poin (N & J) ke 0?",
                     onConfirm: () => {
                         if (!data) return;
-                        const newData = deepClone(data);
+                        const newData = JSON.parse(JSON.stringify(data));
                         players.forEach(p => {
                             newData[p].patokan_normal = 0;
                             newData[p].patokan_joker = 0;
                         });
                         saveData(newData);
-                        setNotification({ message: '🧮 Semua patokan poin berhasil direset.', type: 'success' });
-                    },
+                        logHistory("Semua patokan poin direset ke 0.");
+                        setNotification({ message: "🧮 Semua patokan poin berhasil direset.", type: 'success' });
+                    }
                 });
             };
 
             const handleUndo = () => {
-                if (!backup) {
-                    setNotification({ message: '❌ Tidak ada backup untuk di-undo.', type: 'error' });
+                const backupJson = localStorage.getItem(BACKUP_KEY);
+                if (!backupJson) {
+                    setNotification({ message: "❌ Tidak ada backup untuk di-undo.", type: 'error' });
                     return;
                 }
-                setRedo(deepClone(data));
-                setData(deepClone(backup));
-                setBackup(null);
-                setNotification({ message: '↩️ Undo berhasil!', type: 'success' });
+                localStorage.setItem(REDO_KEY, JSON.stringify(data));
+                const backupData = JSON.parse(backupJson);
+                setData(backupData);
+                localStorage.setItem(DATA_KEY, JSON.stringify(backupData));
+                logHistory("Perubahan terakhir dibatalkan (undo).");
+                setNotification({ message: "↩️ Undo berhasil!", type: 'success' });
             };
 
             const handleRedo = () => {
-                if (!redo) {
-                    setNotification({ message: '❌ Tidak ada perubahan untuk di-redo.', type: 'error' });
+                const redoJson = localStorage.getItem(REDO_KEY);
+                if (!redoJson) {
+                    setNotification({ message: "❌ Tidak ada perubahan untuk di-redo.", type: 'error' });
                     return;
                 }
-                setBackup(deepClone(data));
-                setData(deepClone(redo));
-                setRedo(null);
-                setNotification({ message: '➡️ Redo berhasil!', type: 'success' });
+                localStorage.setItem(BACKUP_KEY, JSON.stringify(data));
+                const redoData = JSON.parse(redoJson);
+                setData(redoData);
+                localStorage.setItem(DATA_KEY, JSON.stringify(redoData));
+                localStorage.removeItem(REDO_KEY);
+                logHistory("Perubahan terakhir diulang (redo).");
+                setNotification({ message: "➡️ Redo berhasil!", type: 'success' });
             };
 
             const handleShowDebug = () => {
-                let detail = '';
+                let detail = "";
                 try {
-                    const prevData = backup || {};
-                    const currData = data || {};
+                    const prevData = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}");
+                    const currData = JSON.parse(localStorage.getItem(DATA_KEY) || "{}");
                     detail += `<div class='font-bold mb-2'>Detail perubahan skor round terakhir:</div>`;
                     players.forEach(p => {
                         const prev = prevData[p]?.skor ?? 0;
                         const curr = currData[p]?.skor ?? 0;
                         const diff = (curr - prev).toFixed(2);
-                        detail += `<div>${p}: <span style='color:${diff > 0 ? 'green' : diff < 0 ? 'red' : '#444'}'>${prev.toFixed(2)} ➔ ${curr.toFixed(2)} (${diff > 0 ? '+' : ''}${diff})</span></div>`;
+                        detail += `<div>${p}: <span style='color:${diff>0?'green':diff<0?'red':'#444'}'>${prev.toFixed(2)} ➔ ${curr.toFixed(2)} (${diff>0?'+':''}${diff})</span></div>`;
                     });
                 } catch (e) {
-                    detail = 'Gagal parsing data debug.';
+                    detail = "Gagal parsing data debug.";
                 }
                 setDebugInfo(detail);
-                open('debug');
+                setDebugModalVisible(true);
             };
 
             const handleSaveScores = (editScores) => {
-                const newData = deepClone(data);
+                const newData = JSON.parse(JSON.stringify(data));
                 let totalCheck = 0;
                 players.forEach(p => {
                     const val = parseFloat(editScores[p]) || 0;
@@ -1102,10 +890,7 @@
                 });
 
                 if (Math.abs(totalCheck) > 0.01) {
-                    setNotification({
-                        message: `❌ Gagal! Total skor tidak seimbang (${totalCheck.toFixed(2)}). Total harus 0.`,
-                        type: 'error',
-                    });
+                    setNotification({ message: `❌ Gagal! Total skor tidak seimbang (${totalCheck.toFixed(2)}). Total harus 0.`, type: 'error' });
                     return;
                 }
 
@@ -1113,41 +898,48 @@
                     newData[p].skor = parseFloat(editScores[p]) || 0;
                 });
                 saveData(newData);
-                setNotification({ message: '✏️ Skor berhasil diedit.', type: 'success' });
-                close('editScores');
+                logHistory("Edit manual skor pemain.");
+                setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
+                setEditModalVisible(false);
             };
 
             const handleSavePlayers = (editPlayers) => {
                 let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
                 if (validPlayers.length < 2) {
-                    setNotification({ message: 'Minimal 2 pemain!', type: 'error' });
+                    setNotification({message:"Minimal 2 pemain!", type:"error"});
                     return;
                 }
+                localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
                 setPlayers(validPlayers);
                 let newData = getInitialData(validPlayers);
                 validPlayers.forEach(p => {
-                    if (data && data[p]) newData[p] = deepClone(data[p]);
+                    if (data && data[p]) newData[p] = {...data[p]};
                 });
                 saveData(newData, false);
-                setNotification({ message: '✅ Nama & jumlah pemain berhasil diupdate!', type: 'success' });
-                close('editPlayers');
+                logHistory(`Edit pemain: ${validPlayers.join(', ')}`);
+                setNotification({message: "✅ Nama & jumlah pemain berhasil diupdate!", type: "success"});
             };
 
             const handleSaveStakes = (stakes) => {
-                const newData = deepClone(data);
+                const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => {
                     newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
                     newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
                 });
                 saveData(newData);
-                setNotification({ message: '✅ Nilai patokan berhasil diupdate!', type: 'success' });
-                close('editStakes');
+                setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});
+            };
+
+            const notificationColors = {
+                info: 'bg-blue-100 text-blue-800',
+                success: 'bg-green-100 text-green-800',
+                error: 'bg-red-100 text-red-800'
             };
 
             return (
                 <div className="max-w-2xl mx-auto">
-                    <Modal isVisible={modals.help} onClose={() => close('help')} title="📘 Panduan Bot Skor">
-                        <div className="text-left text-base leading-relaxed text-gray-700 space-y-4">
+                    <Modal isVisible={helpModalVisible} onClose={() => setHelpModalVisible(false)} title="📘 Panduan Bot Skor">
+                         <div className="text-left text-base leading-relaxed text-gray-700 space-y-4">
                             <div>
                                 <h3 className="font-bold text-lg text-[#4B0082]">Set Patokan Poin</h3>
                                 <p>Isi nilai Normal (N) dan Joker (J) untuk tiap pemain, lalu tekan 'Simpan Poin'. Patokan ini digunakan untuk menghitung skor saat ada yang menang.</p>
@@ -1163,42 +955,35 @@
                                 <h3 className="font-bold text-lg text-[#4B0082]">Simpan ke Google Sheet</h3>
                                 <p>Klik ikon awan (☁️) di bawah untuk membuka menu sinkronisasi. Ikuti panduan di dalamnya untuk menghubungkan aplikasi ini ke Google Sheet pribadi Anda.</p>
                             </div>
-                        </div>
+                         </div>
                     </Modal>
 
-                    <DebugModal isVisible={modals.debug} onClose={() => close('debug')} info={debugInfo} />
-
-                    <EditScoresModal
-                        isVisible={modals.editScores}
-                        onClose={() => close('editScores')}
+                    <DebugModal isVisible={debugModalVisible} onClose={() => setDebugModalVisible(false)} info={debugInfo} />
+                    
+                    <EditScoresModal 
+                        isVisible={editModalVisible} 
+                        onClose={() => setEditModalVisible(false)}
                         data={data}
                         players={players}
                         onSave={handleSaveScores}
                     />
 
-                    <EditPlayersModal
-                        isVisible={modals.editPlayers}
-                        onClose={() => close('editPlayers')}
+                    <EditPlayersModal 
+                        isVisible={editPlayersModalVisible}
+                        onClose={() => setEditPlayersModalVisible(false)}
                         players={players}
                         onSave={handleSavePlayers}
                     />
-
-                    <EditStakesModal
-                        isVisible={modals.editStakes}
-                        onClose={() => close('editStakes')}
-                        data={data}
-                        players={players}
-                        onSave={handleSaveStakes}
-                    />
-
-                    <GoogleSheetsModal
-                        isVisible={modals.sheets}
-                        onClose={() => close('sheets')}
+                    
+                    <GoogleSheetsModal 
+                        isVisible={sheetModalVisible}
+                        onClose={() => setSheetModalVisible(false)}
                         currentUrl={sheetUrl}
+                        onSaveUrl={handleSaveSheetUrl}
                         onSync={handleSyncToSheets}
                     />
 
-                    <ConfirmationModal
+                    <ConfirmationModal 
                         isOpen={confirmModal.isOpen}
                         title={confirmModal.title}
                         message={confirmModal.message}
@@ -1208,96 +993,51 @@
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-end gap-2 mb-2">
-                            <button
-                                onClick={() => open('help')}
-                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors"
-                                aria-label="Help"
-                                title="Bantuan"
-                            >
-                                ❓
-                            </button>
-                            <button
-                                onClick={handleShowDebug}
-                                className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors"
-                                aria-label="Debug"
-                                title="Debug"
-                            >
-                                🐞
-                            </button>
+                            <button onClick={() => setHelpModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Bantuan">📘</button>
+                            <button onClick={handleShowDebug} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Debug">🐞</button>
                         </div>
                         <h1 className="text-3xl font-bold text-center mb-4 text-gray-800">📊 Tabel Skor</h1>
                         {notification.message && (
-                            <div
-                                className={`p-4 rounded-lg mb-4 text-center font-semibold ${
-                                    notification.type === 'success'
-                                        ? 'bg-green-100 text-green-800'
-                                        : notification.type === 'error'
-                                          ? 'bg-red-100 text-red-800'
-                                          : 'bg-blue-100 text-blue-800'
-                                }`}
-                                role="alert"
-                                aria-live="polite"
-                            >
-                                {notification.message}
+                            <div className={`p-3 rounded-lg mb-4 text-center text-sm ${notificationColors[notification.type]}`}>
+                                <p>{notification.message}</p>
                             </div>
                         )}
-
                         <ScoreTable data={data} players={players} />
-
-                        <WinSection
-                            players={players}
-                            onUpdateScore={handleUpdateScore}
+                        <WinSection 
+                            players={players} 
+                            onUpdateScore={handleUpdateScore} 
                             onUpdateTeamScore={handleUpdateTeamScore}
                             setNotification={setNotification}
                         />
-
                         <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
-
-                        <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                            <h2 className="text-xl font-bold mb-4 text-[#4B0082]">⚙️ Pengaturan</h2>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => open('editStakes')}
-                                    className="bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#4B0082] transition-colors"
-                                >
-                                    ⚙️ Patokan Poin
-                                </button>
-                                <button
-                                    onClick={() => open('editScores')}
-                                    className="bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#4B0082] transition-colors"
-                                >
-                                    ✏️ Edit Skor
-                                </button>
-                                <button
-                                    onClick={() => open('editPlayers')}
-                                    className="bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#4B0082] transition-colors"
-                                >
-                                    👥 Edit Pemain
-                                </button>
-                                <button
-                                    onClick={() => open('sheets')}
-                                    className="bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg hover:bg-[#4B0082] transition-colors"
-                                >
-                                    ☁️ Google Sheet
-                                </button>
-                            </div>
-                        </div>
-
-                        <ActionsSection
-                            onUndo={handleUndo}
-                            onRedo={handleRedo}
-                            onResetScores={handleResetScores}
+                        <ActionsSection 
+                            onUndo={handleUndo} 
+                            onRedo={handleRedo} 
+                            onResetScores={handleResetScores} 
                             onResetStakes={handleResetStakes}
                         />
+                    </div>
+
+                    <EditStakesModal 
+                        isVisible={editStakesModalVisible}
+                        onClose={() => setEditStakesModalVisible(false)}
+                        data={data}
+                        players={players}
+                        onSave={handleSaveStakes}
+                    />
+
+                    <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#4B0082] flex justify-around items-center shadow-lg z-50">
+                        <button onClick={() => setEditModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Skor">✏️</button>
+                        <button onClick={() => setEditPlayersModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Pemain">👥</button>
+                        <button onClick={() => setEditStakesModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-gray-700 hover:text-white transition-colors" title="Edit Patokan">⚙️</button>
+                        <button onClick={() => setSheetModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-green-600 hover:text-white transition-colors" title="Save ke Sheet">☁️</button>
                     </div>
                 </div>
             );
         };
 
-        // ============================================
-        // RENDER APP
-        // ============================================
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>

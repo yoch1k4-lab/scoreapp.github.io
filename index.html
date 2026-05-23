@@ -841,8 +841,9 @@
                 setNotification({ message: `🃏 ${logMsg}`, type: 'success' });
                 
                 // Voice Output
-                //const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
-                //speak(`${loser} memasukkan Joker ke ${gainer}. Skor saat ini: ${scoreText}`);
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`${loser} memasukkan Joker ${gainer}`);
+                //speak(`${loser} memasukkan Joker ${gainer}. Skor saat ini: ${scoreText}`);
             };
 
             const handleResetScores = () => {

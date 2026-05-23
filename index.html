@@ -818,13 +818,12 @@
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
                 // Voice Output team win
-                const scoreText = players
-                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')}`)
-                .join(', ');
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
 
-                const gainPerWinner = baseGainPerWinner.toFixed(2).replace('.', ',');
+                const gainPerWinner = Math.round(baseGainPerWinner);
                 const winnerNames = winners.join(' dan ');
-                speak(`${winnerNames} mendapatkan ${gainPerWinner} poin. Skor saat ini: ${scoreText}`);
+
+                speak(`${winnerNames} mendapatkan masing masing ${gainPerWinner} poin. Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {

@@ -760,7 +760,7 @@
                 
                 // Voice Output
                 const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
-                speak(`${winnerCap} menang ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ', menang langsung' : ''}. Skor saat ini: ${scoreText}`);
+                speak(`${winnerCap} menang ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' dikali dua' : ''}. Skor saat ini: ${scoreText}`);
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {

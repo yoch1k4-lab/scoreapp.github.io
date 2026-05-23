@@ -760,10 +760,10 @@
                 
                 // Voice Output single win
                 const scoreText = players
-                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')} poin`)
+                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')}`)
                 .join(', ');
                 const winnerGain = totalLoss.toFixed(2).replace('.', ',');
-                speak(`${winnerCap} mendapatkan ${winnerGain} poin. Skor saat ini: ${scoreText}`);
+                speak(`${winnerCap} mendapatkan ${winnerGain}. Skor saat ini: ${scoreText}`);
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {

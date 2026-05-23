@@ -758,8 +758,10 @@
                 logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
                 
-                // Voice Output
-                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                // Voice Output single win
+                const scoreText = players
+                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')} poin`)
+                .join(', ');
                 const winnerGain = totalLoss.toFixed(2).replace('.', ',');
                 speak(`${winnerCap} mendapatkan ${winnerGain} poin. Skor saat ini: ${scoreText}`);
             };
@@ -818,7 +820,9 @@
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
                 // Voice Output team win
-                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                const scoreText = players
+                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')} poin`)
+                .join(', ');
 
                 const gainPerWinner = baseGainPerWinner.toFixed(2).replace('.', ',');
                 const winnerNames = winners.join(' dan ');

@@ -760,7 +760,8 @@
                 
                 // Voice Output
                 const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
-                speak(`Skor saat ini: ${scoreText}`);
+                const winnerGain = totalLoss.toFixed(2).replace('.', ',');
+                speak(`${winnerCap} mendapatkan ${winnerGain} poin. Skor saat ini: ${scoreText}`);
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {
@@ -816,9 +817,12 @@
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
-                // Voice Output
+                // Voice Output team win
                 const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
-                speak(`Skor saat ini: ${scoreText}`);
+
+                const gainPerWinner = baseGainPerWinner.toFixed(2).replace('.', ',');
+                const winnerNames = winners.join(' dan ');
+                speak(`${winnerNames} mendapatkan masing masing ${gainPerWinner} poin. Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {

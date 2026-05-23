@@ -818,7 +818,7 @@
 
                 // Voice Output
                 const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
-                speak(`${winners.join(' dan ')} menang. Skor saat ini: ${scoreText}`);
+                speak(`Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {
@@ -841,8 +841,9 @@
                 setNotification({ message: `🃏 ${logMsg}`, type: 'success' });
                 
                 // Voice Output
-                speak(`${loser} Memasuk kan Joker ${gainer}`);
-                return true;
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`Skor saat ini: ${scoreText}`);
+                //speak(`${loser} memasukkan Joker ke ${gainer}. Skor saat ini: ${scoreText}`);
             };
 
             const handleResetScores = () => {

@@ -817,7 +817,8 @@
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
                 // Voice Output
-                speak(`${winners.join(' dan ')} menang`);
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`Tim ${winners.join(' dan ')} menang. Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {

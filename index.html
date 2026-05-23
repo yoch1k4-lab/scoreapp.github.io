@@ -759,10 +759,8 @@
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
                 
                 // Voice Output single win
-                const scoreText = players
-                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')}`)
-                .join(', ');
-                const winnerGain = totalLoss.toFixed(2).replace('.', ',');
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                const winnerGain = Math.round(totalLoss);
                 speak(`${winnerCap} mendapatkan ${winnerGain} poin. Skor saat ini: ${scoreText}`);
             };
 

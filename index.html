@@ -759,7 +759,8 @@
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
                 
                 // Voice Output
-                speak(`${winnerCap} menang ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' menang langsung' : ''}`);
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`${winnerCap} menang ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' menang langsung' : ''}. Skor saat ini: ${scoreText}`);
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {

@@ -305,19 +305,41 @@
         const JokerTransferSection = ({ players, onJokerTransfer }) => {
             const [gainer, setGainer] = useState(null);
             const [loser, setLoser] = useState(null);
-            useEffect(() => {setGainer(null);setLoser(null);}, [players]);
+            
+            useEffect(() => {
+                setGainer(null);
+                setLoser(null);
+            }, [players]);
+
+            const handleTransferSubmit = () => {
+                // onJokerTransfer returns true if success, false if failed
+                const isSuccess = onJokerTransfer(gainer, loser);
+                if (isSuccess) {
+                    setGainer(null);
+                    setLoser(null);
+                }
+            };
+
             return (
                 <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
                     <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🃏 Transfer Joker</h2>
                     <label className="text-base font-semibold mb-2 block text-gray-700">Penerima (dapat poin)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
-                        {players.map(p => ( <button key={p} onClick={() => setGainer(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${gainer === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
+                        {players.map(p => ( 
+                            <button key={p} onClick={() => setGainer(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${gainer === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
+                                {p}
+                            </button>
+                        ))}
                     </div>
                     <label className="text-base font-semibold mb-2 block text-gray-700">Pemberi (kena penalti)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
-                        {players.map(p => ( <button key={p} onClick={() => setLoser(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${loser === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>{p}</button>))}
+                        {players.map(p => ( 
+                            <button key={p} onClick={() => setLoser(p)} className={`py-2 px-4 rounded-full m-1 border transition-colors ${loser === p ? 'bg-[#5D3FD3] border-[#4B0082] text-white' : 'bg-gray-100 border-gray-300 text-gray-800'}`}>
+                                {p}
+                            </button>
+                        ))}
                     </div>
-                    <button onClick={() => onJokerTransfer(gainer, loser)} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Transfer</button>
+                    <button onClick={handleTransferSubmit} className="w-full bg-[#5D3FD3] text-white font-bold py-3 px-4 rounded-lg mt-4 hover:bg-[#4B0082] transition-colors">Transfer</button>
                 </div>
             );
         };
@@ -582,6 +604,9 @@
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             
+            // Voice State
+            const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+
             // Sheets Integration State - PRIORITIZE PREFILLED
             const [sheetUrl, setSheetUrl] = useState('');
 
@@ -594,6 +619,16 @@
                     }, 2000);
                 }
             }, []);
+
+            // Voice synthesis helper
+            const speak = useCallback((text) => {
+                if (isVoiceEnabled && 'speechSynthesis' in window) {
+                    window.speechSynthesis.cancel(); // Stop any currently playing audio
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'id-ID'; // Use Indonesian language
+                    window.speechSynthesis.speak(utterance);
+                }
+            }, [isVoiceEnabled]);
 
             useEffect(() => {
                 try {
@@ -722,6 +757,10 @@
                 if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
                 logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
+                
+                // Voice Output
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`Skor saat ini: ${scoreText}`);
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {
@@ -776,18 +815,22 @@
                 if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
+
+                // Voice Output
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {
-                if (!data) return;
+                if (!data) return false;
                 if (!gainer || !loser || gainer === loser) {
                     setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'});
-                    return;
+                    return false;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
                 if (newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
                     setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'});
-                    return;
+                    return false;
                 }
                 const transferAmount = newData[loser].patokan_joker - newData[loser].patokan_normal;
                 newData[gainer].skor += transferAmount;
@@ -796,6 +839,11 @@
                 const logMsg = `Transfer joker dari ${loser} ke ${gainer} (${transferAmount.toFixed(2)} poin)`;
                 logHistory(logMsg);
                 setNotification({ message: `🃏 ${logMsg}`, type: 'success' });
+                
+                // Voice Output
+                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
+                speak(`${loser} memasukkan Joker ${gainer}`);
+                //speak(`${loser} memasukkan Joker ${gainer}. Skor saat ini: ${scoreText}`);
             };
 
             const handleResetScores = () => {
@@ -993,6 +1041,9 @@
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-end gap-2 mb-2">
+                            <button onClick={() => setIsVoiceEnabled(!isVoiceEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Toggle Suara">
+                                {isVoiceEnabled ? '🔊' : '🔇'}
+                            </button>
                             <button onClick={() => setHelpModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Bantuan">📘</button>
                             <button onClick={handleShowDebug} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Debug">🐞</button>
                         </div>
@@ -1041,7 +1092,3 @@
     </script>
 </body>
 </html>
-
-
-
-

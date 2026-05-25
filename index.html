@@ -38,7 +38,7 @@
         // Contoh: const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbx.../exec";
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
 
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
         const DATA_KEY = '@scoreKeeperData_web';
@@ -230,6 +230,11 @@
             const [isWin2, setIsWin2] = useState(false);
             const [jokerHolders, setJokerHolders] = useState([]);
             const [buyers, setBuyers] = useState({});
+            
+            // Voice to Text (Speech Recognition) State
+            const [isListening, setIsListening] = useState(false);
+            const [recognizedText, setRecognizedText] = useState("");
+            const recognitionRef = useRef(null);
 
             useEffect(() => {
                 setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
@@ -239,10 +244,13 @@
             const togglePlayer = (p, list, setList) => {
                 setList(prev => prev.includes(p) ? prev.filter(i => i !== p) : [...prev, p]);
             };
+
             const resetForm = () => {
                 setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
                 setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+                setRecognizedText("");
             };
+
             const handleSubmit = () => {
                 if (winners.length === 0 || winners.length > 2) {
                     setNotification({message: 'Pilih 1 atau 2 pemenang.', type: 'error'}); return;
@@ -258,11 +266,180 @@
                 }
                 resetForm();
             };
+
+            // --- Voice to Text logic ---
+            const startSpeechRecognition = () => {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    setNotification({ message: "Browser Anda tidak mendukung Voice-to-Text.", type: "error" });
+                    return;
+                }
+
+                if (isListening) {
+                    if (recognitionRef.current) recognitionRef.current.stop();
+                    setIsListening(false);
+                    return;
+                }
+
+                const rec = new SpeechRecognition();
+                rec.lang = 'id-ID';
+                rec.continuous = true;
+                rec.interimResults = false;
+
+                rec.onstart = () => {
+                    setIsListening(true);
+                    setNotification({ message: "🎙️ Mendengarkan... Sebutkan nama pemain, opsi, dan 'OK' untuk submit.", type: "info" });
+                };
+
+                rec.onerror = (event) => {
+                    console.error("Speech recognition error", event);
+                    setIsListening(false);
+                };
+
+                rec.onend = () => {
+                    setIsListening(false);
+                };
+
+                rec.onresult = (event) => {
+                    const resultText = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
+                    setRecognizedText(resultText);
+
+                    // Pisahkan kata per kata untuk pemrosesan pintar
+                    const words = resultText.split(/\s+/);
+                    
+                    let foundWinners = [...winners];
+                    let foundJokerHolders = [...jokerHolders];
+                    let currentIsJoker = isJoker;
+                    let currentIsWin2 = isWin2;
+                    let updatedBuyers = { ...buyers };
+                    let wantsSubmit = false;
+
+                    for (let i = 0; i < words.length; i++) {
+                        const word = words[i];
+
+                        // 1. Cek kata kunci submit "ok" atau "oke"
+                        if (word === "ok" || word === "oke" || word === "submit") {
+                            wantsSubmit = true;
+                            continue;
+                        }
+
+                        // 2. Cek Opsi Menang Joker / x2
+                        if (word === "joker") {
+                            currentIsJoker = true;
+                            continue;
+                        }
+                        if (word === "biasa") {
+                            currentIsJoker = false;
+                            continue;
+                        }
+                        if (word === "kali" && words[i+1] === "2" || word === "x2" || word === "double") {
+                            currentIsWin2 = true;
+                            continue;
+                        }
+
+                        // 3. Cek Penalti Joker (Contoh: "penalti nr" atau "joker nr")
+                        if ((word === "penalti" || word === "kena") && i + 1 < words.length) {
+                            const targetName = words[i+1];
+                            const matchedPlayer = players.find(p => p.toLowerCase() === targetName);
+                            if (matchedPlayer) {
+                                if (!foundJokerHolders.includes(matchedPlayer)) {
+                                    foundJokerHolders.push(matchedPlayer);
+                                }
+                                i++; // skip nama pemain
+                                continue;
+                            }
+                        }
+
+                        // 4. Cek Buy Poin (Contoh: "nr buy 1" atau "nr beli 2")
+                        if (i + 2 < words.length && (words[i+1] === "buy" || words[i+1] === "beli")) {
+                            const targetName = word;
+                            const amountStr = words[i+2];
+                            const matchedPlayer = players.find(p => p.toLowerCase() === targetName);
+                            const amount = parseInt(amountStr);
+                            if (matchedPlayer && !isNaN(amount)) {
+                                updatedBuyers[matchedPlayer] = amount;
+                                i += 2; // skip kata buy dan nominal
+                                continue;
+                            }
+                        }
+
+                        // 5. Cek Nama Pemain sebagai pemenang
+                        const matchedPlayer = players.find(p => p.toLowerCase() === word);
+                        if (matchedPlayer) {
+                            if (!foundWinners.includes(matchedPlayer)) {
+                                // Batasi maksimal 2 pemenang
+                                if (foundWinners.length < 2) {
+                                    foundWinners.push(matchedPlayer);
+                                } else {
+                                    // Gantian geser jika melebihi 2 pemenang
+                                    foundWinners.shift();
+                                    foundWinners.push(matchedPlayer);
+                                }
+                            }
+                        }
+                    }
+
+                    // Update states
+                    setWinners(foundWinners);
+                    setIsJoker(currentIsJoker);
+                    setIsWin2(currentIsWin2);
+                    setJokerHolders(foundJokerHolders);
+                    setBuyers(updatedBuyers);
+
+                    // Jika ada perintah "OK" atau "OKE", langsung submit
+                    if (wantsSubmit) {
+                        rec.stop();
+                        setIsListening(false);
+                        
+                        // Menjalankan submit kemenangan setelah delay singkat agar state terupdate dengan baik
+                        setTimeout(() => {
+                            if (foundWinners.length === 0 || foundWinners.length > 2) {
+                                setNotification({message: 'Gagal Submit Suara: Pilih 1 atau 2 pemenang.', type: 'error'});
+                                return;
+                            }
+                            const parsedBuyers = Object.entries(updatedBuyers)
+                                .filter(([,amount]) => amount && !isNaN(parseInt(amount)))
+                                .map(([name, amount]) => ({name, amount: parseInt(amount)}));
+                            
+                            if (foundWinners.length === 1) {
+                                onUpdateScore(foundWinners[0], currentIsJoker, currentIsWin2, foundJokerHolders, parsedBuyers);
+                            } else {
+                                onUpdateTeamScore(foundWinners, foundJokerHolders, parsedBuyers);
+                            }
+                            // Reset form & text
+                            setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
+                            setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
+                            setRecognizedText("");
+                        }, 200);
+                    }
+                };
+
+                recognitionRef.current = rec;
+                rec.start();
+            };
+
             const possibleLosers = players.filter(p => !winners.includes(p));
 
             return (
                 <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                    <h2 className="text-xl font-bold mb-4 text-[#4B0082]">🏆 Catat Kemenangan</h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-[#4B0082]">🏆 Catat Kemenangan</h2>
+                        <button 
+                            type="button"
+                            onClick={startSpeechRecognition}
+                            className={`p-2.5 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500 animate-pulse text-white' : 'bg-gray-100 text-[#4B0082] hover:bg-gray-200'}`}
+                            title="Rekam Suara untuk Input"
+                        >
+                            {isListening ? '🛑 Stop' : '🎙️ Voice Input'}
+                        </button>
+                    </div>
+
+                    {recognizedText && (
+                        <div className="bg-purple-50 p-2.5 rounded-lg mb-4 border border-purple-200 text-xs text-purple-800 font-mono">
+                            🗣️ Terdengar: "{recognizedText}"
+                        </div>
+                    )}
+
                     <label className="text-base font-semibold mb-2 block text-gray-700">1. Pilih Pemenang (1 atau 2)</label>
                     <div className="flex flex-wrap mb-3 -m-1">
                         {players.map(p => (
@@ -1039,6 +1216,17 @@
                                 <p>2. <span className="font-bold">Opsi Menang (Sendiri):</span> Aktifkan 'Menang Joker' atau 'Menang x2' jika perlu.</p>
                                 <p>3. <span className="font-bold">Opsi Tambahan:</span> Pilih pemain yang kalah dan terkena penalti joker, atau isi jumlah 'buy' untuk pemain yang melakukan buy.</p>
                                 <p>4. Tekan <span className="font-bold">'Submit Kemenangan'</span> untuk menghitung skor.</p>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg text-[#4B0082]">🎤 Fitur Perekaman Suara (Voice Input)</h3>
+                                <p>Tekan tombol <b>🎙️ Voice Input</b> di sudut kanan form Catat Kemenangan. Anda bisa mengucapkan perintah secara alami, misalnya:</p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li><i>"Dm menang joker"</i> (Memilih Dm sebagai pemenang dan menyalakan opsi joker)</li>
+                                    <li><i>"Dm Bd"</i> (Memilih kemenangan tim Dm dan Bd)</li>
+                                    <li><i>"Dm kena penalti Bd"</i> (Dm menang, Bd kena penalti joker)</li>
+                                    <li><i>"Dd buy 1"</i> (Dd melakukan buy sebanyak 1 poin)</li>
+                                    <li>Katakan <b>"OK"</b> atau <b>"OKE"</b> di akhir kalimat Anda untuk memicu pengiriman data / submit secara otomatis tanpa menyentuh tombol!</li>
+                                </ul>
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg text-[#4B0082]">Simpan ke Google Sheet</h3>

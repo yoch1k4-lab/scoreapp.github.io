@@ -304,8 +304,9 @@
                     const resultText = event.results[event.results.length - 1][0].transcript.toLowerCase().trim();
                     setRecognizedText(resultText);
 
-                    // Pisahkan kata per kata untuk pemrosesan pintar
-                    const words = resultText.split(/\s+/);
+                    // Pisahkan kata per kata dan hapus tanda baca (koma, titik) untuk mempermudah parsing
+                    const normalizedText = resultText.replace(/[,.]/g, ' ').replace(/\s+/g, ' ');
+                    const words = normalizedText.split(' ');
                     
                     let foundWinners = [...winners];
                     let foundJokerHolders = [...jokerHolders];
@@ -323,75 +324,81 @@
                             continue;
                         }
 
-                        // 2. Cek Opsi Menang Joker / x2
-                        if (word === "joker") {
-                            currentIsJoker = true;
-                            continue;
-                        }
-                        if (word === "biasa") {
-                            currentIsJoker = false;
-                            continue;
-                        }
+                        // 2. Cek Menang x2
                         if (word === "kali" && words[i+1] === "2" || word === "x2" || word === "double") {
                             currentIsWin2 = true;
                             continue;
                         }
 
-                        // 3. Cek Penalti Joker (Contoh: "penalti nr" atau "joker nr")
-                        if ((word === "penalti" || word === "kena") && i + 1 < words.length) {
-                            const targetName = words[i+1];
-                            const matchedPlayer = players.find(p => p.toLowerCase() === targetName);
-                            if (matchedPlayer) {
-                                if (!foundJokerHolders.includes(matchedPlayer)) {
-                                    foundJokerHolders.push(matchedPlayer);
-                                }
-                                i++; // skip nama pemain
-                                continue;
-                            }
-                        }
-
-                        // 4. Cek Buy Poin (Contoh: "nr buy 1" atau "nr beli 2")
-                        if (i + 2 < words.length && (words[i+1] === "buy" || words[i+1] === "beli")) {
-                            const targetName = word;
-                            const amountStr = words[i+2];
-                            const matchedPlayer = players.find(p => p.toLowerCase() === targetName);
-                            const amount = parseInt(amountStr);
-                            if (matchedPlayer && !isNaN(amount)) {
-                                updatedBuyers[matchedPlayer] = amount;
-                                i += 2; // skip kata buy dan nominal
-                                continue;
-                            }
-                        }
-
-                        // 5. Cek Nama Pemain sebagai pemenang
                         const matchedPlayer = players.find(p => p.toLowerCase() === word);
                         if (matchedPlayer) {
-                            if (!foundWinners.includes(matchedPlayer)) {
-                                // Batasi maksimal 2 pemenang
-                                if (foundWinners.length < 2) {
-                                    foundWinners.push(matchedPlayer);
+                            let roleAssigned = false;
+
+                            // 3. Cek Format: "[Player] buy [angka]"
+                            if (i + 1 < words.length && (words[i+1] === "buy" || words[i+1] === "beli")) {
+                                const amount = parseInt(words[i+2]);
+                                if (!isNaN(amount)) {
+                                    updatedBuyers[matchedPlayer] = amount;
+                                    i += 2; // skip kata "buy" dan "angka"
+                                    roleAssigned = true;
+                                    continue;
+                                }
+                            }
+
+                            // 4. Cek Format: "[Player] joker" atau "[Player] penalti"
+                            if (i + 1 < words.length && (words[i+1] === "joker" || words[i+1] === "penalti")) {
+                                if (!foundJokerHolders.includes(matchedPlayer)) foundJokerHolders.push(matchedPlayer);
+                                i += 1;
+                                roleAssigned = true;
+                                continue;
+                            }
+
+                            // 5. Cek Format: "[Player] win" atau "[Player] menang"
+                            if (i + 1 < words.length && (words[i+1] === "win" || words[i+1] === "menang")) {
+                                if (!foundWinners.includes(matchedPlayer)) {
+                                    if (foundWinners.length < 2) foundWinners.push(matchedPlayer);
+                                    else { foundWinners.shift(); foundWinners.push(matchedPlayer); }
+                                }
+                                i += 1;
+                                
+                                // Jika ada "win joker" untuk mengaktifkan status "Menang Joker"
+                                if (i + 1 < words.length && words[i+1] === "joker") {
+                                    currentIsJoker = true;
+                                    i += 1;
+                                }
+                                roleAssigned = true;
+                                continue;
+                            }
+
+                            // 6. Fallback jika nama disebut tetapi tidak ada role yang jelas setelahnya
+                            if (!roleAssigned) {
+                                // Cek kata sebelumnya (misal format: "penalti [Player]")
+                                if (i > 0 && (words[i-1] === "penalti" || words[i-1] === "kena")) {
+                                    if (!foundJokerHolders.includes(matchedPlayer)) foundJokerHolders.push(matchedPlayer);
                                 } else {
-                                    // Gantian geser jika melebihi 2 pemenang
-                                    foundWinners.shift();
-                                    foundWinners.push(matchedPlayer);
+                                    // Default sebagai pemenang jika tidak ada keterangan tambahan
+                                    if (!foundWinners.includes(matchedPlayer)) {
+                                        if (foundWinners.length < 2) foundWinners.push(matchedPlayer);
+                                        else { foundWinners.shift(); foundWinners.push(matchedPlayer); }
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // Update states
+                    // Update UI states secara langsung
                     setWinners(foundWinners);
                     setIsJoker(currentIsJoker);
                     setIsWin2(currentIsWin2);
                     setJokerHolders(foundJokerHolders);
                     setBuyers(updatedBuyers);
 
-                    // Jika ada perintah "OK" atau "OKE", langsung submit
+                    // Jika ada perintah "OK" atau "OKE", langsung jalankan eksekusi Submit
                     if (wantsSubmit) {
                         rec.stop();
                         setIsListening(false);
                         
-                        // Menjalankan submit kemenangan setelah delay singkat agar state terupdate dengan baik
+                        // Menjalankan submit kemenangan dengan delay kecil agar state UI sinkron
                         setTimeout(() => {
                             if (foundWinners.length === 0 || foundWinners.length > 2) {
                                 setNotification({message: 'Gagal Submit Suara: Pilih 1 atau 2 pemenang.', type: 'error'});
@@ -406,7 +413,7 @@
                             } else {
                                 onUpdateTeamScore(foundWinners, foundJokerHolders, parsedBuyers);
                             }
-                            // Reset form & text
+                            // Reset form & text pengenalan suara
                             setWinners([]); setIsJoker(false); setIsWin2(false); setJokerHolders([]);
                             setBuyers(players.reduce((acc, p) => ({...acc, [p]: ''}), {}));
                             setRecognizedText("");
@@ -1221,11 +1228,8 @@
                                 <h3 className="font-bold text-lg text-[#4B0082]">🎤 Fitur Perekaman Suara (Voice Input)</h3>
                                 <p>Tekan tombol <b>🎙️ Voice Input</b> di sudut kanan form Catat Kemenangan. Anda bisa mengucapkan perintah secara alami, misalnya:</p>
                                 <ul className="list-disc pl-5 space-y-1">
-                                    <li><i>"Dm menang joker"</i> (Memilih Dm sebagai pemenang dan menyalakan opsi joker)</li>
+                                    <li><i>"Dm win, Bd buy 1, Nr joker kemudian ok"</i> (Dm menang, Bd buy 1 poin, Nr kena joker, dan submit otomatis)</li>
                                     <li><i>"Dm Bd"</i> (Memilih kemenangan tim Dm dan Bd)</li>
-                                    <li><i>"Dm kena penalti Bd"</i> (Dm menang, Bd kena penalti joker)</li>
-                                    <li><i>"Dd buy 1"</i> (Dd melakukan buy sebanyak 1 poin)</li>
-                                    <li>Katakan <b>"OK"</b> atau <b>"OKE"</b> di akhir kalimat Anda untuk memicu pengiriman data / submit secara otomatis tanpa menyentuh tombol!</li>
                                 </ul>
                             </div>
                             <div>

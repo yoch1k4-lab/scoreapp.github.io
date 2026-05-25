@@ -588,6 +588,18 @@
             );
         };
 
+        const getStack = (key) => {
+            try {
+                const item = localStorage.getItem(key);
+                if (!item) return [];
+                const parsed = JSON.parse(item);
+                // Pastikan formatnya array (menghindari error dengan versi lama yang menyimpan object)
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
+            }
+        };
+
         // --- Main App Component ---
 
         const App = () => {
@@ -659,7 +671,12 @@
             const saveData = useCallback((newData, backupCurrent = true) => {
                 try {
                     if (backupCurrent && data) {
-                        localStorage.setItem(BACKUP_KEY, JSON.stringify(data));
+                        let undoStack = getStack(BACKUP_KEY);
+                        undoStack.push(data);
+                        if (undoStack.length > 5) {
+                            undoStack.shift(); // Hanya simpan 5 riwayat terakhir
+                        }
+                        localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
                         localStorage.removeItem(REDO_KEY);
                     }
                     localStorage.setItem(DATA_KEY, JSON.stringify(newData));
@@ -758,11 +775,11 @@
                 logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
                 
-                // Voice Output single win
+                // --- PERBAIKAN SUARA BILANGAN BULAT ---
                 const scoreText = players
-                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')}`)
-                .join(', ');
-                const winnerGain = totalLoss.toFixed(2).replace('.', ',');
+                    .map(p => `${p} ${Math.round(newData[p].skor)}`)
+                    .join(', ');
+                const winnerGain = Math.round(totalLoss);
                 speak(`${winnerCap} mendapatkan ${winnerGain} poin. Skor saat ini: ${scoreText}`);
             };
 
@@ -819,12 +836,12 @@
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
-                // Voice Output team win
+                // --- PERBAIKAN SUARA BILANGAN BULAT ---
                 const scoreText = players
-                .map(p => `${p} ${Number(newData[p].skor).toFixed(2).replace('.', ',')}`)
-                .join(', ');
+                    .map(p => `${p} ${Math.round(newData[p].skor)}`)
+                    .join(', ');
 
-                const gainPerWinner = baseGainPerWinner.toFixed(2).replace('.', ',');
+                const gainPerWinner = Math.round(baseGainPerWinner);
                 const winnerNames = winners.join(' dan ');
                 speak(`${winnerNames} mendapatkan ${gainPerWinner} poin. Skor saat ini: ${scoreText}`);
             };
@@ -849,9 +866,11 @@
                 setNotification({ message: `🃏 ${logMsg}`, type: 'success' });
                 
                 // Voice Output
-                const scoreText = players.map(p => `${p} ${newData[p].skor}`).join(', ');
                 speak(`${loser} memasukkan Joker ${gainer}`);
-                //speak(`${loser} memasukkan Joker ${gainer}. Skor saat ini: ${scoreText}`);
+                
+                // --- PERBAIKAN DI SINI ---
+                // Tambahkan return true agar state komponen dapat dikosongkan kembali setelah berhasil
+                return true; 
             };
 
             const handleResetScores = () => {
@@ -890,30 +909,43 @@
             };
 
             const handleUndo = () => {
-                const backupJson = localStorage.getItem(BACKUP_KEY);
-                if (!backupJson) {
-                    setNotification({ message: "❌ Tidak ada backup untuk di-undo.", type: 'error' });
+                let undoStack = getStack(BACKUP_KEY);
+                if (undoStack.length === 0) {
+                    setNotification({ message: "❌ Tidak ada riwayat untuk di-undo.", type: 'error' });
                     return;
                 }
-                localStorage.setItem(REDO_KEY, JSON.stringify(data));
-                const backupData = JSON.parse(backupJson);
-                setData(backupData);
-                localStorage.setItem(DATA_KEY, JSON.stringify(backupData));
+
+                const previousData = undoStack.pop();
+                
+                let redoStack = getStack(REDO_KEY);
+                if (data) redoStack.push(data);
+                
+                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                localStorage.setItem(DATA_KEY, JSON.stringify(previousData));
+                
+                setData(previousData);
                 logHistory("Perubahan terakhir dibatalkan (undo).");
                 setNotification({ message: "↩️ Undo berhasil!", type: 'success' });
             };
 
             const handleRedo = () => {
-                const redoJson = localStorage.getItem(REDO_KEY);
-                if (!redoJson) {
+                let redoStack = getStack(REDO_KEY);
+                if (redoStack.length === 0) {
                     setNotification({ message: "❌ Tidak ada perubahan untuk di-redo.", type: 'error' });
                     return;
                 }
-                localStorage.setItem(BACKUP_KEY, JSON.stringify(data));
-                const redoData = JSON.parse(redoJson);
-                setData(redoData);
-                localStorage.setItem(DATA_KEY, JSON.stringify(redoData));
-                localStorage.removeItem(REDO_KEY);
+
+                const nextData = redoStack.pop();
+                
+                let undoStack = getStack(BACKUP_KEY);
+                if (data) undoStack.push(data);
+                
+                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                localStorage.setItem(DATA_KEY, JSON.stringify(nextData));
+                
+                setData(nextData);
                 logHistory("Perubahan terakhir diulang (redo).");
                 setNotification({ message: "➡️ Redo berhasil!", type: 'success' });
             };
@@ -921,7 +953,8 @@
             const handleShowDebug = () => {
                 let detail = "";
                 try {
-                    const prevData = JSON.parse(localStorage.getItem(BACKUP_KEY) || "{}");
+                    const undoStack = getStack(BACKUP_KEY);
+                    const prevData = undoStack.length > 0 ? undoStack[undoStack.length - 1] : {};
                     const currData = JSON.parse(localStorage.getItem(DATA_KEY) || "{}");
                     detail += `<div class='font-bold mb-2'>Detail perubahan skor round terakhir:</div>`;
                     players.forEach(p => {

@@ -244,11 +244,11 @@
                             </button>
                         ))}
                     </div>
-                    <p className="text-sm font-medium mb-2 text-gray-600">Buy Poin</p>
+                    <p className="text-sm font-medium mb-2 text-gray-600">Beli Poin</p>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                         {players.map(p => (
                             <div key={p} className="flex items-center">
-                                <label className="flex-1 text-base">{p} buy:</label>
+                                <label className="flex-1 text-base">{p} beli:</label>
                                 <input type="number" placeholder="0" value={buyers[p] || ''} onChange={e => setBuyers(prev => ({...prev, [p]: e.target.value}))} className="flex-1 border border-gray-300 rounded-lg p-2 text-center w-full"/>
                             </div>
                         ))}
@@ -610,7 +610,7 @@
                 saveData(newData);
                 let logMsg = `${winner} menang ronde ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' (x2)' : ''} (+${totalLoss.toFixed(2)})`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
-                if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                if (buyers.length > 0) logMsg += `, beli: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
                 logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
                 
@@ -670,7 +670,7 @@
                 saveData(newData);
                 let logMsg = `Tim ${winners.join(' & ')} menang`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
-                if (buyers.length > 0) logMsg += `, buy: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                if (buyers.length > 0) logMsg += `, beli: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
@@ -751,8 +751,8 @@
                             if (p && !jokerHolders.includes(p)) jokerHolders.push(p);
                         }
 
-                        // Deteksi Buy (Kata sebelum 'buy', Angka setelah 'buy')
-                        if (word === 'buy' && i > 0 && i < words.length - 1) {
+                        // Deteksi Beli (Kata sebelum 'beli', Angka setelah 'beli')
+                        if (word === 'beli' && i > 0 && i < words.length - 1) {
                             const p = getPlayer(words[i-1]);
                             const amountStr = words[i+1];
                             const amount = parseInt(amountStr.replace(/[^0-9]/g, '')); // pastikan hanya ambil angka
@@ -951,8 +951,8 @@
                                     <li><b>Menang x2:</b> "[Nama] win langsung"</li>
                                     <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
                                     <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Buy:</b> "[Pemenang] win [Kalah] buy 1" (cth: <i>"Budi win Dede buy 2"</i>)</li>
-                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori buy 1"</i></li>
+                                    <li><b>Catat Beli:</b> "[Pemenang] win [Kalah] beli 1" (cth: <i>"Budi win Dede beli 2"</i>)</li>
+                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli 1"</i></li>
                                     <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
                                 </ul>
                                 <p className="mt-2 text-xs text-gray-500">*Gunakan nama pemain yang jelas agar mudah dideteksi oleh Google Voice.</p>

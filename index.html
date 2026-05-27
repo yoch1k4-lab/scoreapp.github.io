@@ -118,6 +118,7 @@
 
         const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
             const [url, setUrl] = useState(currentUrl || '');
+            const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
@@ -698,6 +699,20 @@
                 return true; 
             };
 
+            // --- VOICE RECOGNITION LOGIC ---
+
+            const parseIndonesianNumber = (str) => {
+                if (!str) return NaN;
+                const map = {
+                    'satu': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 'lima': 5,
+                    'enam': 6, 'tujuh': 7, 'delapan': 8, 'sembilan': 9, 'sepuluh': 10,
+                    'sekali': 1
+                };
+                if (map[str] !== undefined) return map[str];
+                const parsed = parseInt(str.replace(/[^0-9]/g, ''));
+                return isNaN(parsed) ? NaN : parsed;
+            };
+
             const processVoiceCommand = (text) => {
                 // Bersihkan teks dari tanda baca
                 const cleanText = text.replace(/[.,?!]/g, '').toLowerCase().trim();
@@ -748,13 +763,25 @@
                             if (p && !jokerHolders.includes(p)) jokerHolders.push(p);
                         }
 
-                        // Deteksi Beli (Kata sebelum 'beli', Angka setelah 'beli')
-                        if (word === 'beli' && i > 0 && i < words.length - 1) {
+                        // Deteksi Beli dengan Format Baru ("beli sekali", "beli dua kali", "beli 2 kali", dsb)
+                        if (word === 'beli' && i > 0) {
                             const p = getPlayer(words[i-1]);
-                            const amountStr = words[i+1];
-                            const amount = parseInt(amountStr.replace(/[^0-9]/g, '')); // pastikan hanya ambil angka
-                            if (p && !isNaN(amount)) {
-                                buyers.push({name: p, amount: amount});
+                            if (p) {
+                                let amount = NaN;
+                                const nextWord = words[i+1];
+                                
+                                if (nextWord === 'sekali') {
+                                    amount = 1;
+                                } else {
+                                    const numValue = parseIndonesianNumber(nextWord);
+                                    if (!isNaN(numValue)) {
+                                        amount = numValue;
+                                    }
+                                }
+
+                                if (!isNaN(amount)) {
+                                    buyers.push({ name: p, amount: amount });
+                                }
                             }
                         }
                     }
@@ -769,9 +796,7 @@
                     }
                 }
 
-                // Apabila format salah dan tidak ada yang dieksekusi di atas
                 setNotification({message: "Format suara tidak dikenali: " + text, type: "error"});
-                speak("input salah"); // Notifikasi suara ditambahkan di sini
             };
 
             const toggleListening = () => {
@@ -817,6 +842,8 @@
 
                 recognition.start();
             };
+
+            // --- END VOICE LOGIC ---
 
             const handleResetScores = () => {
                 setConfirmModal({
@@ -948,8 +975,8 @@
                                     <li><b>Menang x2:</b> "[Nama] win langsung"</li>
                                     <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
                                     <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Beli:</b> "[Pemenang] win [Kalah] beli 1" (cth: <i>"Budi win Dede beli 2"</i>)</li>
-                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli 1"</i></li>
+                                    <li><b>Catat Beli (Format Baru):</b> "[Pemenang] win [Kalah] beli sekali" atau "[Kalah] beli [X] kali" (cth: <i>"Budi win Dede beli sekali"</i> atau <i>"Budi win Dede beli dua kali"</i>)</li>
+                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli sekali"</i></li>
                                     <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
                                 </ul>
                                 <p className="mt-2 text-xs text-gray-500">*Gunakan nama pemain yang jelas agar mudah dideteksi oleh Google Voice.</p>

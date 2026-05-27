@@ -494,106 +494,6 @@
 
             const [sheetUrl, setSheetUrl] = useState('');
 
-            const audioCtxRef = useRef(null);
-            const bgMusicNodeRef = useRef(null);
-            const bgGainNodeRef = useRef(null);
-            const isPlayingRef = useRef(false);
-            const [isBgMusicPlaying, setIsBgMusicPlaying] = useState(false);
-            const [bgMusicVolume, setBgMusicVolume] = useState(0.15); // Default soft volume
-            const volumeRef = useRef(0.15);
-
-            // Menjaga nilai volumeRef tetap mutakhir
-            useEffect(() => {
-                volumeRef.current = bgMusicVolume;
-                if (bgGainNodeRef.current && audioCtxRef.current) {
-                    bgGainNodeRef.current.gain.linearRampToValueAtTime(bgMusicVolume, audioCtxRef.current.currentTime + 0.1);
-                }
-            }, [bgMusicVolume]);
-
-            // Berhenti memutar musik latar
-            const stopBgMusic = useCallback(() => {
-                isPlayingRef.current = false;
-                setIsBgMusicPlaying(false);
-                if (bgMusicNodeRef.current) {
-                    clearTimeout(bgMusicNodeRef.current);
-                    bgMusicNodeRef.current = null;
-                }
-                if (bgGainNodeRef.current) {
-                    bgGainNodeRef.current.disconnect();
-                    bgGainNodeRef.current = null;
-                }
-            }, []);
-
-            // Mulai memutar musik latar ambient lo-fi
-            const startBgMusic = useCallback(() => {
-                if (!audioCtxRef.current) {
-                    audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                const ctx = audioCtxRef.current;
-                if (ctx.state === 'suspended') {
-                    ctx.resume();
-                }
-
-                const gainNode = ctx.createGain();
-                gainNode.gain.setValueAtTime(volumeRef.current, ctx.currentTime);
-                gainNode.connect(ctx.destination);
-                bgGainNodeRef.current = gainNode;
-
-                isPlayingRef.current = true;
-                setIsBgMusicPlaying(true);
-
-                // Progresi akor ambient lembut (Cmaj7 - Am7/D - Fmaj7 - G7)
-                const chords = [
-                    [130.81, 164.81, 196.00, 246.94], 
-                    [110.00, 146.83, 164.81, 220.00], 
-                    [130.81, 174.61, 220.00, 261.63], 
-                    [146.83, 196.00, 246.94, 293.66]  
-                ];
-
-                let chordIndex = 0;
-                const playNextChord = () => {
-                    if (!isPlayingRef.current) return;
-                    const activeChord = chords[chordIndex];
-                    
-                    activeChord.forEach(freq => {
-                        const osc = ctx.createOscillator();
-                        osc.type = 'triangle'; // Gelombang segitiga yang lembut
-                        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-                        
-                        // Filter agar suara tidak cempreng
-                        const filter = ctx.createBiquadFilter();
-                        filter.type = 'lowpass';
-                        filter.frequency.setValueAtTime(350, ctx.currentTime);
-                        
-                        // Envelope ADSR (Attack - Release) lambat agar menyatu lembut
-                        const oscGain = ctx.createGain();
-                        oscGain.gain.setValueAtTime(0, ctx.currentTime);
-                        oscGain.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 2.0); // attack lembut
-                        oscGain.gain.setValueAtTime(0.04, ctx.currentTime + 5.0);
-                        oscGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 7.5); // release lembut
-
-                        osc.connect(filter);
-                        filter.connect(oscGain);
-                        oscGain.connect(gainNode);
-
-                        osc.start();
-                        osc.stop(ctx.currentTime + 8.0);
-                    });
-
-                    chordIndex = (chordIndex + 1) % chords.length;
-                    bgMusicNodeRef.current = setTimeout(playNextChord, 7000); // transisi sedikit tumpang tindih
-                };
-
-                playNextChord();
-            }, []);
-
-            // Bersihkan musik saat komponen dilepas
-            useEffect(() => {
-                return () => {
-                    stopBgMusic();
-                };
-            }, [stopBgMusic]);
-
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
                 if (notif && notif.message) {
@@ -609,24 +509,8 @@
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
-
-                    // SAAT MULAI BICARA: Duck/Mute musik latar secara halus
-                    utterance.onstart = () => {
-                        if (bgGainNodeRef.current && audioCtxRef.current) {
-                            bgGainNodeRef.current.gain.linearRampToValueAtTime(0.0, audioCtxRef.current.currentTime + 0.15);
-                        }
-                    };
-
-                    // SAAT SELESAI/ERROR: Unmute/Kembalikan volume musik latar ke semula
-                    const restoreVolume = () => {
-                        if (bgGainNodeRef.current && audioCtxRef.current) {
-                            bgGainNodeRef.current.gain.linearRampToValueAtTime(volumeRef.current, audioCtxRef.current.currentTime + 0.4);
-                        }
-                    };
-
-                    utterance.onend = restoreVolume;
-                    utterance.onerror = restoreVolume;
-
+                    // Auto-Muting untuk Web Audio API telah dihapus karena Spotify iframe 
+                    // tidak mengizinkan pengubahan volume dari sisi script aplikasi kita.
                     window.speechSynthesis.speak(utterance);
                 }
             }, [isVoiceEnabled]);
@@ -1157,43 +1041,19 @@
                         
                         <ScoreTable data={data} players={players} />
 
-                        <div className="bg-white rounded-xl p-4 mb-5 shadow-md border-l-4 border-purple-500">
-                            <h2 className="text-lg font-bold text-[#4B0082] flex items-center gap-2">🎵 Musik Latar Belakang (Ambience)</h2>
-                            <p className="text-xs text-gray-500 mb-3">Musik latar relaksasi yang otomatis hening (mute) ketika skor sedang dibacakan.</p>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <button 
-                                        onClick={isBgMusicPlaying ? stopBgMusic : startBgMusic} 
-                                        className={`py-2 px-5 rounded-full font-bold text-sm shadow transition-colors flex items-center gap-2 ${
-                                            isBgMusicPlaying 
-                                            ? 'bg-red-500 text-white hover:bg-red-600' 
-                                            : 'bg-green-600 text-white hover:bg-green-700'
-                                        }`}
-                                    >
-                                        {isBgMusicPlaying ? '⏸️ Matikan Musik' : '▶️ Putar Musik'}
-                                    </button>
-                                    <span className="text-sm font-semibold text-gray-700">
-                                        Status: {isBgMusicPlaying ? '🟢 Memutar' : '🔴 Berhenti'}
-                                    </span>
-                                </div>
-                                {isBgMusicPlaying && (
-                                    <div className="flex items-center gap-2 flex-grow sm:max-w-[200px]">
-                                        <span className="text-xs text-gray-500">Vol:</span>
-                                        <input 
-                                            type="range" 
-                                            min="0" 
-                                            max="0.4" 
-                                            step="0.01" 
-                                            value={bgMusicVolume} 
-                                            onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
-                                            className="w-full accent-[#5D3FD3] cursor-pointer"
-                                        />
-                                        <span className="text-xs font-bold text-[#4B0082] w-8 text-right">
-                                            {Math.round(bgMusicVolume * 250)}%
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
+                        <div className="bg-white rounded-xl p-4 mb-5 shadow-md border-l-4 border-green-500">
+                            <h2 className="text-lg font-bold text-[#1DB954] flex items-center gap-2 mb-2">🎵 Musik Latar (Spotify)</h2>
+                            <p className="text-xs text-gray-500 mb-3">Memutar playlist lofi santai. (Note: Fitur auto-mute saat pembacaan tidak dapat beroperasi melalui embed Spotify)</p>
+                            <iframe 
+                                style={{ borderRadius: '12px' }} 
+                                src="<iframe data-testid="embed-iframe" style="border-radius:12px" src="https://open.spotify.com/embed/playlist/4G1wrheU9m03xjXrUj5jZm?utm_source=generator" width="100%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>" 
+                                width="100%" 
+                                height="152" 
+                                frameBorder="0" 
+                                allowFullScreen="" 
+                                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                                loading="lazy">
+                            </iframe>
                         </div>
 
                         <WinSection 

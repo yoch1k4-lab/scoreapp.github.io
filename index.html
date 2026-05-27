@@ -44,10 +44,9 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
 
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
         const DATA_KEY = '@scoreKeeperData_web';
@@ -118,7 +117,6 @@
 
         const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
             const [url, setUrl] = useState(currentUrl || '');
-            const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
@@ -496,6 +494,106 @@
 
             const [sheetUrl, setSheetUrl] = useState('');
 
+            const audioCtxRef = useRef(null);
+            const bgMusicNodeRef = useRef(null);
+            const bgGainNodeRef = useRef(null);
+            const isPlayingRef = useRef(false);
+            const [isBgMusicPlaying, setIsBgMusicPlaying] = useState(false);
+            const [bgMusicVolume, setBgMusicVolume] = useState(0.15); // Default soft volume
+            const volumeRef = useRef(0.15);
+
+            // Menjaga nilai volumeRef tetap mutakhir
+            useEffect(() => {
+                volumeRef.current = bgMusicVolume;
+                if (bgGainNodeRef.current && audioCtxRef.current) {
+                    bgGainNodeRef.current.gain.linearRampToValueAtTime(bgMusicVolume, audioCtxRef.current.currentTime + 0.1);
+                }
+            }, [bgMusicVolume]);
+
+            // Berhenti memutar musik latar
+            const stopBgMusic = useCallback(() => {
+                isPlayingRef.current = false;
+                setIsBgMusicPlaying(false);
+                if (bgMusicNodeRef.current) {
+                    clearTimeout(bgMusicNodeRef.current);
+                    bgMusicNodeRef.current = null;
+                }
+                if (bgGainNodeRef.current) {
+                    bgGainNodeRef.current.disconnect();
+                    bgGainNodeRef.current = null;
+                }
+            }, []);
+
+            // Mulai memutar musik latar ambient lo-fi
+            const startBgMusic = useCallback(() => {
+                if (!audioCtxRef.current) {
+                    audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const ctx = audioCtxRef.current;
+                if (ctx.state === 'suspended') {
+                    ctx.resume();
+                }
+
+                const gainNode = ctx.createGain();
+                gainNode.gain.setValueAtTime(volumeRef.current, ctx.currentTime);
+                gainNode.connect(ctx.destination);
+                bgGainNodeRef.current = gainNode;
+
+                isPlayingRef.current = true;
+                setIsBgMusicPlaying(true);
+
+                // Progresi akor ambient lembut (Cmaj7 - Am7/D - Fmaj7 - G7)
+                const chords = [
+                    [130.81, 164.81, 196.00, 246.94], 
+                    [110.00, 146.83, 164.81, 220.00], 
+                    [130.81, 174.61, 220.00, 261.63], 
+                    [146.83, 196.00, 246.94, 293.66]  
+                ];
+
+                let chordIndex = 0;
+                const playNextChord = () => {
+                    if (!isPlayingRef.current) return;
+                    const activeChord = chords[chordIndex];
+                    
+                    activeChord.forEach(freq => {
+                        const osc = ctx.createOscillator();
+                        osc.type = 'triangle'; // Gelombang segitiga yang lembut
+                        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                        
+                        // Filter agar suara tidak cempreng
+                        const filter = ctx.createBiquadFilter();
+                        filter.type = 'lowpass';
+                        filter.frequency.setValueAtTime(350, ctx.currentTime);
+                        
+                        // Envelope ADSR (Attack - Release) lambat agar menyatu lembut
+                        const oscGain = ctx.createGain();
+                        oscGain.gain.setValueAtTime(0, ctx.currentTime);
+                        oscGain.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 2.0); // attack lembut
+                        oscGain.gain.setValueAtTime(0.04, ctx.currentTime + 5.0);
+                        oscGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 7.5); // release lembut
+
+                        osc.connect(filter);
+                        filter.connect(oscGain);
+                        oscGain.connect(gainNode);
+
+                        osc.start();
+                        osc.stop(ctx.currentTime + 8.0);
+                    });
+
+                    chordIndex = (chordIndex + 1) % chords.length;
+                    bgMusicNodeRef.current = setTimeout(playNextChord, 7000); // transisi sedikit tumpang tindih
+                };
+
+                playNextChord();
+            }, []);
+
+            // Bersihkan musik saat komponen dilepas
+            useEffect(() => {
+                return () => {
+                    stopBgMusic();
+                };
+            }, [stopBgMusic]);
+
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
                 if (notif && notif.message) {
@@ -511,6 +609,24 @@
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
+
+                    // SAAT MULAI BICARA: Duck/Mute musik latar secara halus
+                    utterance.onstart = () => {
+                        if (bgGainNodeRef.current && audioCtxRef.current) {
+                            bgGainNodeRef.current.gain.linearRampToValueAtTime(0.0, audioCtxRef.current.currentTime + 0.15);
+                        }
+                    };
+
+                    // SAAT SELESAI/ERROR: Unmute/Kembalikan volume musik latar ke semula
+                    const restoreVolume = () => {
+                        if (bgGainNodeRef.current && audioCtxRef.current) {
+                            bgGainNodeRef.current.gain.linearRampToValueAtTime(volumeRef.current, audioCtxRef.current.currentTime + 0.4);
+                        }
+                    };
+
+                    utterance.onend = restoreVolume;
+                    utterance.onerror = restoreVolume;
+
                     window.speechSynthesis.speak(utterance);
                 }
             }, [isVoiceEnabled]);
@@ -644,9 +760,8 @@
                     let currentLoss = baseChange;
                     const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
-                    const buyPenaltyCalc = buyerInfo ? buyPenaltyCalc * newData[loser].patokan_normal : 0; // Fixed typo (was buyPenaltyCalc = buyerInfo ? buyerInfo.amount * ...)
-                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
-                    currentLoss += jokerPenaltyCalc + finalBuyPenalty;
+                    const buyPenaltyCalc = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
+                    currentLoss += jokerPenaltyCalc + buyPenaltyCalc;
                     newData[loser].skor -= currentLoss;
                 });
                 
@@ -715,22 +830,19 @@
             };
 
             const processVoiceCommand = (text) => {
-                // Bersihkan teks dari tanda baca
                 const cleanText = text.replace(/[.,?!]/g, '').toLowerCase().trim();
                 const words = cleanText.split(/\s+/);
 
-                // Fungsi cari pemain (Mendukung nama tidak sama persis/typo dari voice recognition)
                 const getPlayer = (wordStr) => {
                     if (!wordStr) return null;
                     return players.find(p => p.toLowerCase() === wordStr || wordStr.includes(p.toLowerCase()) || p.toLowerCase().includes(wordStr));
                 };
 
-                // 1. KASUS TRANSFER JOKER: "[nama] masukin joker [nama]"
                 if (cleanText.includes('masukin joker') || cleanText.includes('masukkan joker')) {
                     const delimiter = cleanText.includes('masukin joker') ? 'masukin joker' : 'masukkan joker';
                     const parts = cleanText.split(delimiter);
-                    const loserStr = parts[0].trim().split(' ').pop();  // Kata sebelum "masukin"
-                    const gainerStr = parts[1].trim().split(' ')[0];    // Kata setelah "joker"
+                    const loserStr = parts[0].trim().split(' ').pop();
+                    const gainerStr = parts[1].trim().split(' ')[0];
 
                     const loser = getPlayer(loserStr);
                     const gainer = getPlayer(gainerStr);
@@ -741,7 +853,6 @@
                     }
                 }
 
-                // 2. KASUS MENANG & BUY: "[nama] win..."
                 if (cleanText.includes('win')) {
                     let isJoker = cleanText.includes('win joker');
                     let isWin2 = cleanText.includes('win langsung');
@@ -752,19 +863,16 @@
                     for (let i = 0; i < words.length; i++) {
                         const word = words[i];
 
-                        // Deteksi Pemenang (Kata sebelum 'win')
                         if (word === 'win' && i > 0) {
                             const p = getPlayer(words[i-1]);
                             if (p && !winners.includes(p)) winners.push(p);
                         }
 
-                        // Deteksi Kena Joker (Kata sebelum 'joker', kecuali jika itu kata 'win')
                         if (word === 'joker' && i > 0 && words[i-1] !== 'win' && words[i-1] !== 'masukin' && words[i-1] !== 'masukkan') {
                             const p = getPlayer(words[i-1]);
                             if (p && !jokerHolders.includes(p)) jokerHolders.push(p);
                         }
 
-                        // Deteksi Beli dengan Format Baru ("beli sekali", "beli dua kali", "beli 2 kali", dsb)
                         if (word === 'beli' && i > 0) {
                             const p = getPlayer(words[i-1]);
                             if (p) {
@@ -927,7 +1035,6 @@
             const handleSaveScores = (editScores) => {
                 let hasError = false;
 
-                // 1. Cek jika ada kolom yang kosong, tidak valid, atau tidak bisa di-parse sebagai angka
                 for (const p of players) {
                     const val = editScores[p];
                     if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) {
@@ -936,7 +1043,6 @@
                     }
                 }
 
-                // 2. Hitung total keseimbangan skor (harus 0)
                 let totalCheck = 0;
                 players.forEach(p => { 
                     totalCheck += (parseFloat(editScores[p]) || 0); 
@@ -946,13 +1052,11 @@
                     hasError = true;
                 }
 
-                // Jika format salah, jangan di-input melainkan beri notifikasi error
                 if (hasError) {
                     setNotification({ message: `❌ Input salah! Pastikan semua kolom terisi angka dan total akumulasi seluruh skor adalah 0.`, type: 'error' });
                     return;
                 }
 
-                // Simpan data jika format valid
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
                 saveData(newData);
@@ -999,7 +1103,7 @@
                                     <li><b>Menang x2:</b> "[Nama] win langsung"</li>
                                     <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
                                     <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Beli (Format Baru):</b> "[Pemenang] win [Kalah] beli sekali" atau "[Kalah] beli [X] kali" (cth: <i>"Budi win Dede beli sekali"</i> atau <i>"Budi win Dede beli dua kali"</i>)</li>
+                                    <li><b>Catat Beli:</b> "[Pemenang] win [Kalah] beli sekali" atau "[Kalah] beli [X] kali" (cth: <i>"Budi win Dede beli sekali"</i> atau <i>"Budi win Dede beli dua kali"</i>)</li>
                                     <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli sekali"</i></li>
                                     <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
                                 </ul>
@@ -1020,7 +1124,6 @@
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-between items-center mb-2">
-                            {/* Tombol Voice Microphone Kiri Atas */}
                             <button 
                                 onClick={toggleListening} 
                                 className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 
@@ -1038,7 +1141,6 @@
                             </div>
                         </div>
 
-                        {/* Indikator Status Voice (Transcript) */}
                         {voiceTranscript && (
                             <div className="bg-gray-800 text-white p-3 rounded-lg mb-4 text-center text-sm shadow-inner break-words">
                                 {voiceTranscript}
@@ -1054,6 +1156,46 @@
                         )}
                         
                         <ScoreTable data={data} players={players} />
+
+                        <div className="bg-white rounded-xl p-4 mb-5 shadow-md border-l-4 border-purple-500">
+                            <h2 className="text-lg font-bold text-[#4B0082] flex items-center gap-2">🎵 Musik Latar Belakang (Ambience)</h2>
+                            <p className="text-xs text-gray-500 mb-3">Musik latar relaksasi yang otomatis hening (mute) ketika skor sedang dibacakan.</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={isBgMusicPlaying ? stopBgMusic : startBgMusic} 
+                                        className={`py-2 px-5 rounded-full font-bold text-sm shadow transition-colors flex items-center gap-2 ${
+                                            isBgMusicPlaying 
+                                            ? 'bg-red-500 text-white hover:bg-red-600' 
+                                            : 'bg-green-600 text-white hover:bg-green-700'
+                                        }`}
+                                    >
+                                        {isBgMusicPlaying ? '⏸️ Matikan Musik' : '▶️ Putar Musik'}
+                                    </button>
+                                    <span className="text-sm font-semibold text-gray-700">
+                                        Status: {isBgMusicPlaying ? '🟢 Memutar' : '🔴 Berhenti'}
+                                    </span>
+                                </div>
+                                {isBgMusicPlaying && (
+                                    <div className="flex items-center gap-2 flex-grow sm:max-w-[200px]">
+                                        <span className="text-xs text-gray-500">Vol:</span>
+                                        <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="0.4" 
+                                            step="0.01" 
+                                            value={bgMusicVolume} 
+                                            onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
+                                            className="w-full accent-[#5D3FD3] cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-[#4B0082] w-8 text-right">
+                                            {Math.round(bgMusicVolume * 250)}%
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <WinSection 
                             players={players} 
                             onUpdateScore={handleUpdateScore} 

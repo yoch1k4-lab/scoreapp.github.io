@@ -118,7 +118,6 @@
 
         const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
             const [url, setUrl] = useState(currentUrl || '');
-            const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
@@ -579,6 +578,7 @@
                 for (const p of players) {
                     if (newData[p][key] <= 0) {
                         setNotification({message: `⚠️ Gagal! ${p} belum set nilai ${isJoker ? 'Joker' : 'Normal'}.`, type: 'error'});
+                        speak("input salah");
                         return;
                     }
                 }
@@ -604,6 +604,7 @@
                 const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' });
+                    speak("input salah");
                     return;
                 }
 
@@ -624,6 +625,7 @@
                 for (const p of players) {
                     if (newData[p].patokan_normal <= 0) {
                         setNotification({ message: `⚠️ Gagal! ${p} belum set nilai Normal.`, type: 'error' });
+                        speak("input salah");
                         return;
                     }
                 }
@@ -631,7 +633,9 @@
                 const winnerBuyers = buyers.filter(b => winners.includes(b.name));
                 const loserBuyers = buyers.filter(b => losers.includes(b.name));
                 if (winnerBuyers.length > 1) {
-                    setNotification({ message: `❌ Hanya satu pemenang yang boleh buy.`, type: 'error' }); return;
+                    setNotification({ message: `❌ Hanya satu pemenang yang boleh buy.`, type: 'error' }); 
+                    speak("input salah");
+                    return;
                 }
                 const totalNormalStake = players.reduce((sum, p) => sum + newData[p].patokan_normal, 0);
                 const baseChange = totalNormalStake / players.length;
@@ -644,7 +648,6 @@
                     let currentLoss = baseChange;
                     const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
-                    const buyPenaltyCalc = buyerInfo ? buyPenaltyCalc * newData[loser].patokan_normal : 0; // Fixed typo (was buyPenaltyCalc = buyerInfo ? buyerInfo.amount * ...)
                     const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
                     currentLoss += jokerPenaltyCalc + finalBuyPenalty;
                     newData[loser].skor -= currentLoss;
@@ -665,7 +668,9 @@
                 
                 const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
-                    setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' }); return;
+                    setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' }); 
+                    speak("input salah");
+                    return;
                 }
                 
                 saveData(newData);
@@ -682,11 +687,15 @@
             const handleJokerTransfer = (gainer, loser) => {
                 if (!data) return false;
                 if (!gainer || !loser || gainer === loser) {
-                    setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'}); return false;
+                    setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'}); 
+                    speak("input salah");
+                    return false;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
                 if (newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
-                    setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'}); return false;
+                    setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'}); 
+                    speak("input salah");
+                    return false;
                 }
                 const transferAmount = newData[loser].patokan_joker - newData[loser].patokan_normal;
                 newData[gainer].skor += transferAmount;
@@ -729,15 +738,15 @@
                 if (cleanText.includes('masukin joker') || cleanText.includes('masukkan joker')) {
                     const delimiter = cleanText.includes('masukin joker') ? 'masukin joker' : 'masukkan joker';
                     const parts = cleanText.split(delimiter);
-                    const loserStr = parts[0].trim().split(' ').pop();  // Kata sebelum "masukin"
-                    const gainerStr = parts[1].trim().split(' ')[0];    // Kata setelah "joker"
+                    const loserStr = parts[0]?.trim().split(' ').pop();  // Kata sebelum "masukin"
+                    const gainerStr = parts[1]?.trim().split(' ')[0];    // Kata setelah "joker"
 
                     const loser = getPlayer(loserStr);
                     const gainer = getPlayer(gainerStr);
 
                     if (gainer && loser) {
                         handleJokerTransfer(gainer, loser);
-                        return;
+                        return; // Berhasil diproses, hentikan eksekusi
                     }
                 }
 
@@ -793,11 +802,14 @@
                         } else {
                             handleUpdateTeamScore(winners, jokerHolders, buyers);
                         }
-                        return;
+                        return; // Berhasil diproses, hentikan eksekusi
                     }
                 }
 
+                // JIKA FORMAT SUARA SALAH / TIDAK DIKENALI:
+                // Jangan di-input, langsung tampilkan alert merah dan beri peringatan suara "input salah"
                 setNotification({message: "Format suara tidak dikenali: " + text, type: "error"});
+                speak("input salah");
             };
 
             const toggleListening = () => {
@@ -946,9 +958,10 @@
                     hasError = true;
                 }
 
-                // Jika format salah, jangan di-input melainkan beri notifikasi error
+                // Jika format salah, jangan di-input melainkan beri notifikasi error & peringatan suara
                 if (hasError) {
                     setNotification({ message: `❌ Input salah! Pastikan semua kolom terisi angka dan total akumulasi seluruh skor adalah 0.`, type: 'error' });
+                    speak("input salah");
                     return;
                 }
 
@@ -961,128 +974,4 @@
             };
 
             const handleSavePlayers = (editPlayers) => {
-                let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
-                if (validPlayers.length < 2) { setNotification({message:"Minimal 2 pemain!", type:"error"}); return; }
-                localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
-                setPlayers(validPlayers);
-                let newData = getInitialData(validPlayers);
-                validPlayers.forEach(p => { if (data && data[p]) newData[p] = {...data[p]}; });
-                saveData(newData, false);
-                setNotification({message: "✅ Nama & jumlah pemain berhasil diupdate!", type: "success"});
-            };
-
-            const handleSaveStakes = (stakes) => {
-                const newData = JSON.parse(JSON.stringify(data));
-                players.forEach(p => {
-                    newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
-                    newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
-                });
-                saveData(newData);
-                setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});
-            };
-
-            const notificationColors = {
-                info: 'bg-blue-100 text-blue-800',
-                success: 'bg-green-100 text-green-800',
-                error: 'bg-red-100 text-red-800'
-            };
-
-            return (
-                <div className="max-w-2xl mx-auto">
-                    <Modal isVisible={helpModalVisible} onClose={() => setHelpModalVisible(false)} title="📘 Panduan & Voice Command">
-                         <div className="text-left text-sm leading-relaxed text-gray-700 space-y-4">
-                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                <h3 className="font-bold text-base text-[#4B0082] mb-1">🎤 Format Suara (Voice to Text)</h3>
-                                <ul className="list-disc pl-4 space-y-1">
-                                    <li><b>Menang Normal:</b> "[Nama] win" (cth: <i>"Budi win"</i>)</li>
-                                    <li><b>Menang Tim:</b> "[Nama1] win [Nama2] win" (cth: <i>"Budi win Dede win"</i>)</li>
-                                    <li><b>Menang x2:</b> "[Nama] win langsung"</li>
-                                    <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
-                                    <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Beli (Format Baru):</b> "[Pemenang] win [Kalah] beli sekali" atau "[Kalah] beli [X] kali" (cth: <i>"Budi win Dede beli sekali"</i> atau <i>"Budi win Dede beli dua kali"</i>)</li>
-                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli sekali"</i></li>
-                                    <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
-                                </ul>
-                                <p className="mt-2 text-xs text-gray-500">*Gunakan nama pemain yang jelas agar mudah dideteksi oleh Google Voice.</p>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-base text-[#4B0082]">Set Patokan Poin</h3>
-                                <p>Isi nilai Normal (N) dan Joker (J) untuk tiap pemain di menu Setting ⚙️ di bawah.</p>
-                            </div>
-                         </div>
-                    </Modal>
-
-                    <DebugModal isVisible={debugModalVisible} onClose={() => setDebugModalVisible(false)} info={debugInfo} />
-                    <EditScoresModal isVisible={editModalVisible} onClose={() => setEditModalVisible(false)} data={data} players={players} onSave={handleSaveScores} />
-                    <EditPlayersModal isVisible={editPlayersModalVisible} onClose={() => setEditPlayersModalVisible(false)} players={players} onSave={handleSavePlayers} />
-                    <GoogleSheetsModal isVisible={sheetModalVisible} onClose={() => setSheetModalVisible(false)} currentUrl={sheetUrl} onSaveUrl={handleSaveSheetUrl} onSync={handleSyncToSheets} />
-                    <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={confirmModal.onConfirm} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} />
-
-                    <div className="p-4 pb-24">
-                        <div className="flex justify-between items-center mb-2">
-                            {/* Tombol Voice Microphone Kiri Atas */}
-                            <button 
-                                onClick={toggleListening} 
-                                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 
-                                title="Perintah Suara (Voice Command)"
-                            >
-                                🎤
-                            </button>
-
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => setIsVoiceEnabled(!isVoiceEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Toggle Feedback Suara">
-                                    {isVoiceEnabled ? '🔊' : '🔇'}
-                                </button>
-                                <button onClick={() => setHelpModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Bantuan">📘</button>
-                                <button onClick={handleShowDebug} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Debug">🐞</button>
-                            </div>
-                        </div>
-
-                        {/* Indikator Status Voice (Transcript) */}
-                        {voiceTranscript && (
-                            <div className="bg-gray-800 text-white p-3 rounded-lg mb-4 text-center text-sm shadow-inner break-words">
-                                {voiceTranscript}
-                            </div>
-                        )}
-
-                        <h1 className="text-3xl font-bold text-center mb-4 text-gray-800">📊 Tabel Skor</h1>
-                        
-                        {notification.message && (
-                            <div className={`p-3 rounded-lg mb-4 text-center text-sm ${notificationColors[notification.type]}`}>
-                                <p>{notification.message}</p>
-                            </div>
-                        )}
-                        
-                        <ScoreTable data={data} players={players} />
-                        <WinSection 
-                            players={players} 
-                            onUpdateScore={handleUpdateScore} 
-                            onUpdateTeamScore={handleUpdateTeamScore}
-                            setNotification={setNotification}
-                        />
-                        <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
-                        <ActionsSection 
-                            onUndo={handleUndo} 
-                            onRedo={handleRedo} 
-                            onResetScores={handleResetScores} 
-                            onResetStakes={handleResetStakes}
-                        />
-                    </div>
-
-                    <EditStakesModal isVisible={editStakesModalVisible} onClose={() => setEditStakesModalVisible(false)} data={data} players={players} onSave={handleSaveStakes} />
-
-                    <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#4B0082] flex justify-around items-center shadow-lg z-50">
-                        <button onClick={() => setEditModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Skor">✏️</button>
-                        <button onClick={() => setEditPlayersModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Pemain">👥</button>
-                        <button onClick={() => setEditStakesModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-gray-700 hover:text-white transition-colors" title="Edit Patokan">⚙️</button>
-                        <button onClick={() => setSheetModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-green-600 hover:text-white transition-colors" title="Save ke Sheet">☁️</button>
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                let validPlayers = editPlayers.map(

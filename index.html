@@ -644,8 +644,9 @@
                     let currentLoss = baseChange;
                     const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
-                    const buyPenaltyCalc = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
-                    currentLoss += jokerPenaltyCalc + buyPenaltyCalc;
+                    const buyPenaltyCalc = buyerInfo ? buyPenaltyCalc * newData[loser].patokan_normal : 0; // Fixed typo (was buyPenaltyCalc = buyerInfo ? buyerInfo.amount * ...)
+                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
+                    currentLoss += jokerPenaltyCalc + finalBuyPenalty;
                     newData[loser].skor -= currentLoss;
                 });
                 
@@ -924,13 +925,36 @@
             };
 
             const handleSaveScores = (editScores) => {
-                const newData = JSON.parse(JSON.stringify(data));
-                let totalCheck = 0;
-                players.forEach(p => { totalCheck += (parseFloat(editScores[p]) || 0); });
-                if (Math.abs(totalCheck) > 0.01) {
-                    setNotification({ message: `❌ Gagal! Total skor tidak seimbang. Total harus 0.`, type: 'error' }); return;
+                let hasError = false;
+
+                // 1. Cek jika ada kolom yang kosong, tidak valid, atau tidak bisa di-parse sebagai angka
+                for (const p of players) {
+                    const val = editScores[p];
+                    if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) {
+                        hasError = true;
+                        break;
+                    }
                 }
-                players.forEach(p => { newData[p].skor = parseFloat(editScores[p]) || 0; });
+
+                // 2. Hitung total keseimbangan skor (harus 0)
+                let totalCheck = 0;
+                players.forEach(p => { 
+                    totalCheck += (parseFloat(editScores[p]) || 0); 
+                });
+
+                if (Math.abs(totalCheck) > 0.01) {
+                    hasError = true;
+                }
+
+                // Jika format salah, jangan di-input melainkan beri notifikasi error
+                if (hasError) {
+                    setNotification({ message: `❌ Input salah! Pastikan semua kolom terisi angka dan total akumulasi seluruh skor adalah 0.`, type: 'error' });
+                    return;
+                }
+
+                // Simpan data jika format valid
+                const newData = JSON.parse(JSON.stringify(data));
+                players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
                 saveData(newData);
                 setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
                 setEditModalVisible(false);

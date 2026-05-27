@@ -118,7 +118,6 @@
 
         const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
             const [url, setUrl] = useState(currentUrl || '');
-            const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
@@ -699,8 +698,6 @@
                 return true; 
             };
 
-            // --- VOICE RECOGNITION LOGIC ---
-
             const processVoiceCommand = (text) => {
                 // Bersihkan teks dari tanda baca
                 const cleanText = text.replace(/[.,?!]/g, '').toLowerCase().trim();
@@ -772,7 +769,9 @@
                     }
                 }
 
+                // Apabila format salah dan tidak ada yang dieksekusi di atas
                 setNotification({message: "Format suara tidak dikenali: " + text, type: "error"});
+                speak("input salah"); // Notifikasi suara ditambahkan di sini
             };
 
             const toggleListening = () => {
@@ -818,8 +817,6 @@
 
                 recognition.start();
             };
-
-            // --- END VOICE LOGIC ---
 
             const handleResetScores = () => {
                 setConfirmModal({

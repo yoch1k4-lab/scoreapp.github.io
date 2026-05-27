@@ -27,7 +27,7 @@
             background: #555;
         }
         
-        /* Animasi Mikrofon Berkedip */
+        /* Animasi Mic Berkedip */
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
@@ -47,7 +47,7 @@
         // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
-        const { useState, useEffect, useCallback, useRef } = React;
+        const { useState, useEffect, useCallback } = React;
 
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
         const DATA_KEY = '@scoreKeeperData_web';
@@ -57,7 +57,7 @@
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
         const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
-        // --- Struktur Data Awal ---
+        // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
             const data = {};
             players.forEach(player => {
@@ -66,7 +66,7 @@
             return data;
         };
 
-        // --- Komponen Bersama ---
+        // --- Shared Components ---
 
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
@@ -118,6 +118,7 @@
 
         const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
             const [url, setUrl] = useState(currentUrl || '');
+            const [showTutorial, setShowTutorial] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
@@ -151,7 +152,7 @@
         };
 
         const ScoreTable = ({ data, players }) => {
-            if (!data) return <div className="text-center mt-5 text-lg text-gray-600">Memuat data...</div>;
+            if (!data) return <div className="text-center mt-5 text-lg text-gray-600">Loading data...</div>;
             return (
                 <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
                     <div className="flex pb-2 border-b-2 border-gray-300">
@@ -169,7 +170,7 @@
                                 <p className="flex-[3] text-base text-gray-800">{player}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
-                                <p className={`flex-[2] text-right font-bold ${scoreColor}`}>
+                                <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
                                     {score.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
@@ -472,7 +473,7 @@
             }
         };
 
-        // --- Komponen Aplikasi Utama ---
+        // --- Main App Component ---
 
         const App = () => {
             const [players, setPlayers] = useState(DEFAULT_PLAYERS);
@@ -488,39 +489,12 @@
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             
-            // State Suara & Audio Ducking
+            // Voice State
             const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
             const [isListening, setIsListening] = useState(false);
             const [voiceTranscript, setVoiceTranscript] = useState('');
 
             const [sheetUrl, setSheetUrl] = useState('');
-
-            // Ref untuk audio sunyi (Audio Focus Hacking)
-            const silentAudioRef = useRef(null);
-
-            // Inisialisasi Audio Sunyi untuk merebut fokus audio eksternal
-            useEffect(() => {
-                // Membuat audio sunyi 1 detik (base64 wav kosong)
-                const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAARKwAARKwAAAEAAgAZABgAbGFzdAAAAAAA");
-                audio.loop = true;
-                silentAudioRef.current = audio;
-            }, []);
-
-            // Fungsi untuk merebut Audio Focus (menjeda musik eksternal seperti Spotify/YouTube)
-            const acquireAudioFocus = () => {
-                if (silentAudioRef.current) {
-                    silentAudioRef.current.play()
-                        .catch(err => console.log("Gagal memicu fokus audio. Perlu interaksi pengguna terlebih dahulu:", err));
-                }
-            };
-
-            // Fungsi untuk melepaskan Audio Focus (melanjutkan musik eksternal)
-            const releaseAudioFocus = () => {
-                if (silentAudioRef.current) {
-                    silentAudioRef.current.pause();
-                    silentAudioRef.current.currentTime = 0;
-                }
-            };
 
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
@@ -532,25 +506,11 @@
                 }
             }, []);
 
-            // Pembacaan teks dengan fitur jeda musik otomatis
             const speak = useCallback((text) => {
                 if (isVoiceEnabled && 'speechSynthesis' in window) {
                     window.speechSynthesis.cancel();
-                    
-                    // Rebut fokus audio sebelum berbicara
-                    acquireAudioFocus();
-
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
-                    
-                    // Kembalikan fokus audio saat selesai membaca atau terjadi error
-                    utterance.onend = () => {
-                        releaseAudioFocus();
-                    };
-                    utterance.onerror = () => {
-                        releaseAudioFocus();
-                    };
-
                     window.speechSynthesis.speak(utterance);
                 }
             }, [isVoiceEnabled]);
@@ -684,6 +644,7 @@
                     let currentLoss = baseChange;
                     const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
+                    const buyPenaltyCalc = buyerInfo ? buyPenaltyCalc * newData[loser].patokan_normal : 0; // Fixed typo (was buyPenaltyCalc = buyerInfo ? buyerInfo.amount * ...)
                     const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
                     currentLoss += jokerPenaltyCalc + finalBuyPenalty;
                     newData[loser].skor -= currentLoss;
@@ -739,7 +700,7 @@
                 return true; 
             };
 
-            // --- LOGIKA VOICE RECOGNITION ---
+            // --- VOICE RECOGNITION LOGIC ---
 
             const parseIndonesianNumber = (str) => {
                 if (!str) return NaN;
@@ -754,20 +715,22 @@
             };
 
             const processVoiceCommand = (text) => {
+                // Bersihkan teks dari tanda baca
                 const cleanText = text.replace(/[.,?!]/g, '').toLowerCase().trim();
                 const words = cleanText.split(/\s+/);
 
+                // Fungsi cari pemain (Mendukung nama tidak sama persis/typo dari voice recognition)
                 const getPlayer = (wordStr) => {
                     if (!wordStr) return null;
                     return players.find(p => p.toLowerCase() === wordStr || wordStr.includes(p.toLowerCase()) || p.toLowerCase().includes(wordStr));
                 };
 
-                // 1. TRANSFER JOKER: "[nama] masukin joker [nama]"
+                // 1. KASUS TRANSFER JOKER: "[nama] masukin joker [nama]"
                 if (cleanText.includes('masukin joker') || cleanText.includes('masukkan joker')) {
                     const delimiter = cleanText.includes('masukin joker') ? 'masukin joker' : 'masukkan joker';
                     const parts = cleanText.split(delimiter);
-                    const loserStr = parts[0].trim().split(' ').pop();
-                    const gainerStr = parts[1].trim().split(' ')[0];
+                    const loserStr = parts[0].trim().split(' ').pop();  // Kata sebelum "masukin"
+                    const gainerStr = parts[1].trim().split(' ')[0];    // Kata setelah "joker"
 
                     const loser = getPlayer(loserStr);
                     const gainer = getPlayer(gainerStr);
@@ -789,16 +752,19 @@
                     for (let i = 0; i < words.length; i++) {
                         const word = words[i];
 
+                        // Deteksi Pemenang (Kata sebelum 'win')
                         if (word === 'win' && i > 0) {
                             const p = getPlayer(words[i-1]);
                             if (p && !winners.includes(p)) winners.push(p);
                         }
 
+                        // Deteksi Kena Joker (Kata sebelum 'joker', kecuali jika itu kata 'win')
                         if (word === 'joker' && i > 0 && words[i-1] !== 'win' && words[i-1] !== 'masukin' && words[i-1] !== 'masukkan') {
                             const p = getPlayer(words[i-1]);
                             if (p && !jokerHolders.includes(p)) jokerHolders.push(p);
                         }
 
+                        // Deteksi Beli dengan Format Baru ("beli sekali", "beli dua kali", "beli 2 kali", dsb)
                         if (word === 'beli' && i > 0) {
                             const p = getPlayer(words[i-1]);
                             if (p) {
@@ -877,6 +843,8 @@
 
                 recognition.start();
             };
+
+            // --- END VOICE LOGIC ---
 
             const handleResetScores = () => {
                 setConfirmModal({
@@ -959,6 +927,7 @@
             const handleSaveScores = (editScores) => {
                 let hasError = false;
 
+                // 1. Cek jika ada kolom yang kosong, tidak valid, atau tidak bisa di-parse sebagai angka
                 for (const p of players) {
                     const val = editScores[p];
                     if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) {
@@ -967,6 +936,7 @@
                     }
                 }
 
+                // 2. Hitung total keseimbangan skor (harus 0)
                 let totalCheck = 0;
                 players.forEach(p => { 
                     totalCheck += (parseFloat(editScores[p]) || 0); 
@@ -976,11 +946,13 @@
                     hasError = true;
                 }
 
+                // Jika format salah, jangan di-input melainkan beri notifikasi error
                 if (hasError) {
                     setNotification({ message: `❌ Input salah! Pastikan semua kolom terisi angka dan total akumulasi seluruh skor adalah 0.`, type: 'error' });
                     return;
                 }
 
+                // Simpan data jika format valid
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
                 saveData(newData);
@@ -1037,10 +1009,6 @@
                                 <h3 className="font-bold text-base text-[#4B0082]">Set Patokan Poin</h3>
                                 <p>Isi nilai Normal (N) dan Joker (J) untuk tiap pemain di menu Setting ⚙️ di bawah.</p>
                             </div>
-                            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                                <h3 className="font-bold text-base text-yellow-800 mb-1">🎵 Fitur Auto Jeda Musik</h3>
-                                <p className="text-xs text-yellow-700">Aplikasi akan secara otomatis menjeda (pause) / mengecilkan volume musik eksternal dari Spotify atau YouTube saat pembacaan skor berlangsung, dan memutarnya kembali setelah pembacaan selesai.</p>
-                            </div>
                          </div>
                     </Modal>
 
@@ -1052,7 +1020,7 @@
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-between items-center mb-2">
-                            {/* Tombol Mikrofon Kiri Atas */}
+                            {/* Tombol Voice Microphone Kiri Atas */}
                             <button 
                                 onClick={toggleListening} 
                                 className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 

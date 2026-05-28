@@ -495,6 +495,7 @@
             
             // Audio ref for forced audio focus on mobile
             const audioRef = useRef(null);
+            const audioCtxRef = useRef(null);
 
             // Voice State
             const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
@@ -516,31 +517,54 @@
             // --- Fungsi Teks ke Suara (Text to Speech) dengan penanganan Audio Focus ---
             const speak = useCallback((text) => {
                 if (isVoiceEnabled && 'speechSynthesis' in window) {
-                    // Trik Audio Focus: Mainkan audio kosong untuk memberitahu OS Android 
-                    // agar menurunkan volume / menjeda media lain (seperti Spotify)
+                    // Trik 1: Inisialisasi Web Audio API (Lebih agresif mengambil focus di Android)
+                    if (!audioCtxRef.current) {
+                        try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+                    }
+                    let osc = null;
+                    if (audioCtxRef.current) {
+                        const ctx = audioCtxRef.current;
+                        if (ctx.state === 'suspended') ctx.resume();
+                        try {
+                            osc = ctx.createOscillator();
+                            const gain = ctx.createGain();
+                            gain.gain.value = 0; // Volume 0 (Silent)
+                            osc.connect(gain);
+                            gain.connect(ctx.destination);
+                            osc.start();
+                        } catch(e) {}
+                    }
+
+                    // Trik 2: Mainkan HTML5 Audio kosong untuk mengelabui OS
                     if (audioRef.current) {
-                        audioRef.current.play().catch(e => console.log("Gagal memutar audio kosong (Autoplay policy):", e));
+                        audioRef.current.play().catch(e => console.log("Gagal memutar audio kosong:", e));
+                    }
+
+                    // Trik 3: Lapor ke Media Session OS Android
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.playbackState = 'playing';
                     }
 
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
                     
-                    // Ketika suara selesai, matikan audio kosong agar Spotify bisa resume kembali
-                    utterance.onend = () => {
+                    // Ketika selesai ngomong, matikan semua trik audio agar Spotify bisa resume
+                    const stopFocus = () => {
+                        if (osc) {
+                            try { osc.stop(); } catch(e) {}
+                        }
                         if (audioRef.current) {
                             audioRef.current.pause();
                             audioRef.current.currentTime = 0;
+                        }
+                        if ('mediaSession' in navigator) {
+                            navigator.mediaSession.playbackState = 'none';
                         }
                     };
 
-                    // Jika error, pastikan juga me-release audio focus
-                    utterance.onerror = () => {
-                        if (audioRef.current) {
-                            audioRef.current.pause();
-                            audioRef.current.currentTime = 0;
-                        }
-                    };
+                    utterance.onend = stopFocus;
+                    utterance.onerror = stopFocus;
 
                     window.speechSynthesis.speak(utterance);
                 }
@@ -1003,7 +1027,7 @@
             return (
                 <div className="max-w-2xl mx-auto">
                     {/* Elemen Audio Tersembunyi untuk mengatur Audio Focus di Android */}
-                    <audio ref={audioRef} src={SILENT_AUDIO_URI} preload="auto" loop />
+                    <audio ref={audioRef} src={SILENT_AUDIO_URI} playsInline preload="auto" loop />
 
                     <Modal isVisible={helpModalVisible} onClose={() => setHelpModalVisible(false)} title="📘 Panduan & Voice Command">
                          <div className="text-left text-sm leading-relaxed text-gray-700 space-y-4">

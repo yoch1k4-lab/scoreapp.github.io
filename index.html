@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -47,6 +47,10 @@
         // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
+        // Data URI untuk suara kosong (silence) berdurasi pendek. 
+        // Digunakan untuk merebut "Audio Focus" di Android agar Spotify/Musik lain pause.
+        const SILENT_AUDIO_URI = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIAD+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAExhdmM1OC41NAAAAAAAAAAAAAAAACQAAAAAAAAAAAEgSbL2AAAAAAAAAAAA//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+
         const { useState, useEffect, useCallback, useRef } = React;
 
         const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
@@ -67,7 +71,6 @@
         };
 
         // --- Shared Components ---
-
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
                 type="button"
@@ -116,14 +119,17 @@
             );
         };
 
-        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync }) => {
+        const GoogleSheetsModal = ({ isVisible, onClose, currentUrl, onSaveUrl, onSync, setNotification }) => {
             const [url, setUrl] = useState(currentUrl || '');
             const [isSyncing, setIsSyncing] = useState(false);
 
             useEffect(() => { setUrl(currentUrl || ''); }, [currentUrl, isVisible]);
 
             const handleSync = async () => {
-                if (!url) { alert("URL belum disetting!"); return; }
+                if (!url) { 
+                    setNotification({message: "URL belum disetting!", type: "error"});
+                    return; 
+                }
                 setIsSyncing(true);
                 await onSync(url);
                 setIsSyncing(false);
@@ -169,7 +175,7 @@
                                 <p className="flex-[3] text-base text-gray-800">{player}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_normal ?? 0}</p>
                                 <p className="flex-1 text-base text-gray-800 text-center">{info?.patokan_joker ?? 0}</p>
-                                <p className={`flex-[2] text-right font-bold ${scoreColor}`}>
+                                <p className={`flex-[2] text-base text-right font-bold ${scoreColor}`}>
                                     {score.toFixed(2).replace('.', ',')}
                                 </p>
                             </div>
@@ -473,11 +479,10 @@
         };
 
         // --- Main App Component ---
-
         const App = () => {
             const [players, setPlayers] = useState(DEFAULT_PLAYERS);
             const [data, setData] = useState(null);
-            const [notification, setNotificationRaw] = useState({ message: 'Selamat Datang! Gunakan fitur Voice untuk mencatat skor otomatis.', type: 'info' });
+            const [notification, setNotificationRaw] = useState({ message: 'Welcome! Gunakan fitur Voice untuk mencatat skor otomatis.', type: 'info' });
             
             const [helpModalVisible, setHelpModalVisible] = useState(false);
             const [editModalVisible, setEditModalVisible] = useState(false);
@@ -488,15 +493,15 @@
             const [debugInfo, setDebugInfo] = useState(null);
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             
+            // Audio ref for forced audio focus on mobile
+            const audioRef = useRef(null);
+
             // Voice State
             const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
             const [isListening, setIsListening] = useState(false);
             const [voiceTranscript, setVoiceTranscript] = useState('');
 
             const [sheetUrl, setSheetUrl] = useState('');
-
-            // Ref untuk menangani pemutaran suara kosong (silent audio) demi mendapatkan Audio Focus
-            const audioCtxRef = useRef(null);
 
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
@@ -508,54 +513,34 @@
                 }
             }, []);
 
-            // Fungsi untuk mengklaim Audio Focus dengan membuat & memainkan audio kosong singkat
-            const requestAudioFocus = () => {
-                try {
-                    if (!audioCtxRef.current) {
-                        const AudioContext = window.AudioContext || window.webkitAudioContext;
-                        if (AudioContext) {
-                            audioCtxRef.current = new AudioContext();
-                        }
-                    }
-                    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-                        audioCtxRef.current.resume();
-                    }
-                    
-                    // Mainkan gelombang suara sunyi selama 0.1 detik untuk memberi sinyal sistem menjeda musik luar
-                    const buffer = audioCtxRef.current.createBuffer(1, audioCtxRef.current.sampleRate * 0.1, audioCtxRef.current.sampleRate);
-                    const source = audioCtxRef.current.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(audioCtxRef.current.destination);
-                    source.start(0);
-                } catch (e) {
-                    console.log("Audio Focus Request bypass atau error:", e);
-                }
-            };
-
+            // --- Fungsi Teks ke Suara (Text to Speech) dengan penanganan Audio Focus ---
             const speak = useCallback((text) => {
                 if (isVoiceEnabled && 'speechSynthesis' in window) {
-                    // Batalkan antrean ucapan yang sedang berjalan
-                    window.speechSynthesis.cancel();
-                    
-                    // Klaim Audio Focus sebelum berbicara demi mematikan/menjeda musik Spotify/Youtube eksternal
-                    requestAudioFocus();
+                    // Trik Audio Focus: Mainkan audio kosong untuk memberitahu OS Android 
+                    // agar menurunkan volume / menjeda media lain (seperti Spotify)
+                    if (audioRef.current) {
+                        audioRef.current.play().catch(e => console.log("Gagal memutar audio kosong (Autoplay policy):", e));
+                    }
 
+                    window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
                     
-                    // Opsional: Atur volume & pitch agar stabil
-                    utterance.volume = 1.0;
-                    utterance.rate = 1.0;
-
-                    // Menggunakan Audio Session API jika didukung oleh browser modern saat ini
-                    if (navigator.audioSession) {
-                        try {
-                            // Set tipe sesi ke "speech" atau "playback" yang memicu sistem menghentikan aplikasi lain
-                            navigator.audioSession.type = "playback";
-                        } catch (err) {
-                            console.log("AudioSession setting error:", err);
+                    // Ketika suara selesai, matikan audio kosong agar Spotify bisa resume kembali
+                    utterance.onend = () => {
+                        if (audioRef.current) {
+                            audioRef.current.pause();
+                            audioRef.current.currentTime = 0;
                         }
-                    }
+                    };
+
+                    // Jika error, pastikan juga me-release audio focus
+                    utterance.onerror = () => {
+                        if (audioRef.current) {
+                            audioRef.current.pause();
+                            audioRef.current.currentTime = 0;
+                        }
+                    };
 
                     window.speechSynthesis.speak(utterance);
                 }
@@ -588,11 +573,12 @@
                     localStorage.setItem(DATA_KEY, JSON.stringify(newData));
                     setData(newData);
                 } catch (e) {
-                    setNotification({ message: 'Gagal menyimpan data!', type: 'error' });
+                    setNotification({ message: 'Error saving data!', type: 'error' });
                 }
             }, [data, setNotification]);
 
             const handleSaveSheetUrl = (url) => { setSheetUrl(url); localStorage.setItem(SHEETS_KEY, url); };
+            
             const handleSyncToSheets = async (targetUrl) => {
                 if (!data) return;
                 const scoresMap = {};
@@ -603,7 +589,7 @@
                     setNotification({ message: '✅ Data terkirim ke Google Sheet!', type: 'success' });
                     setSheetModalVisible(false);
                 } catch (error) {
-                    setNotification({ message: '❌ Gagal mengirim. Periksa URL atau koneksi.', type: 'error' });
+                    setNotification({ message: '❌ Gagal mengirim. Cek URL atau koneksi.', type: 'error' });
                 }
             };
 
@@ -768,7 +754,6 @@
                     return players.find(p => p.toLowerCase() === wordStr || wordStr.includes(p.toLowerCase()) || p.toLowerCase().includes(wordStr));
                 };
 
-                // 1. KASUS TRANSFER JOKER: "[nama] masukin joker [nama]"
                 if (cleanText.includes('masukin joker') || cleanText.includes('masukkan joker')) {
                     const delimiter = cleanText.includes('masukin joker') ? 'masukin joker' : 'masukkan joker';
                     const parts = cleanText.split(delimiter);
@@ -784,7 +769,6 @@
                     }
                 }
 
-                // 2. KASUS MENANG & BUY: "[nama] win..."
                 if (cleanText.includes('win')) {
                     let isJoker = cleanText.includes('win joker');
                     let isWin2 = cleanText.includes('win langsung');
@@ -848,12 +832,9 @@
 
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
-                    setNotification({message: "Browser Anda tidak mendukung fitur Voice Recognition. Gunakan Chrome/Edge terbaru.", type: "error"});
+                    setNotification({message: "Browser Anda tidak mendukung fitur Voice Recognition.", type: "error"});
                     return;
                 }
-
-                // Ambil Audio Focus sebelum mulai mendengarkan agar Spotify/Youtube terjeda & mic fokus menangkap suara
-                requestAudioFocus();
 
                 const recognition = new SpeechRecognition();
                 recognition.lang = 'id-ID';
@@ -886,8 +867,6 @@
 
                 recognition.start();
             };
-
-            // --- END VOICE LOGIC ---
 
             const handleResetScores = () => {
                 setConfirmModal({
@@ -969,7 +948,6 @@
 
             const handleSaveScores = (editScores) => {
                 let hasError = false;
-
                 for (const p of players) {
                     const val = editScores[p];
                     if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) {
@@ -977,21 +955,17 @@
                         break;
                     }
                 }
-
                 let totalCheck = 0;
                 players.forEach(p => { 
                     totalCheck += (parseFloat(editScores[p]) || 0); 
                 });
-
                 if (Math.abs(totalCheck) > 0.01) {
                     hasError = true;
                 }
-
                 if (hasError) {
                     setNotification({ message: `❌ Input salah! Pastikan semua kolom terisi angka dan total akumulasi seluruh skor adalah 0.`, type: 'error' });
                     return;
                 }
-
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
                 saveData(newData);
@@ -1028,6 +1002,9 @@
 
             return (
                 <div className="max-w-2xl mx-auto">
+                    {/* Elemen Audio Tersembunyi untuk mengatur Audio Focus di Android */}
+                    <audio ref={audioRef} src={SILENT_AUDIO_URI} preload="auto" loop />
+
                     <Modal isVisible={helpModalVisible} onClose={() => setHelpModalVisible(false)} title="📘 Panduan & Voice Command">
                          <div className="text-left text-sm leading-relaxed text-gray-700 space-y-4">
                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
@@ -1038,15 +1015,10 @@
                                     <li><b>Menang x2:</b> "[Nama] win langsung"</li>
                                     <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
                                     <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Beli (Format Baru):</b> "[Pemenang] win [Kalah] beli sekali" atau "[Kalah] beli [X] kali" (cth: <i>"Budi win Dede beli sekali"</i> atau <i>"Budi win Dede beli dua kali"</i>)</li>
-                                    <li><b>Kombinasi:</b> <i>"Budi win joker Dede joker Nori beli sekali"</i></li>
+                                    <li><b>Catat Beli:</b> "[Pemenang] win [Kalah] beli sekali" (cth: <i>"Budi win Dede beli sekali"</i>)</li>
                                     <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
                                 </ul>
                                 <p className="mt-2 text-xs text-gray-500">*Gunakan nama pemain yang jelas agar mudah dideteksi oleh Google Voice.</p>
-                            </div>
-                            <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                                <h3 className="font-bold text-base text-[#4B0082] mb-1">🎵 Auto-Pause Musik</h3>
-                                <p className="text-xs">Aplikasi akan secara otomatis meminta fokus suara perangkat saat membaca skor atau mendengarkan perintah suara. Ini akan menghentikan/menjeda sementara pemutaran Spotify atau YouTube Anda.</p>
                             </div>
                             <div>
                                 <h3 className="font-bold text-base text-[#4B0082]">Set Patokan Poin</h3>
@@ -1058,12 +1030,11 @@
                     <DebugModal isVisible={debugModalVisible} onClose={() => setDebugModalVisible(false)} info={debugInfo} />
                     <EditScoresModal isVisible={editModalVisible} onClose={() => setEditModalVisible(false)} data={data} players={players} onSave={handleSaveScores} />
                     <EditPlayersModal isVisible={editPlayersModalVisible} onClose={() => setEditPlayersModalVisible(false)} players={players} onSave={handleSavePlayers} />
-                    <GoogleSheetsModal isVisible={sheetModalVisible} onClose={() => setSheetModalVisible(false)} currentUrl={sheetUrl} onSaveUrl={handleSaveSheetUrl} onSync={handleSyncToSheets} />
+                    <GoogleSheetsModal isVisible={sheetModalVisible} onClose={() => setSheetModalVisible(false)} currentUrl={sheetUrl} onSaveUrl={handleSaveSheetUrl} onSync={handleSyncToSheets} setNotification={setNotification} />
                     <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={confirmModal.onConfirm} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} />
 
                     <div className="p-4 pb-24">
                         <div className="flex justify-between items-center mb-2">
-                            {/* Tombol Voice Microphone Kiri Atas */}
                             <button 
                                 onClick={toggleListening} 
                                 className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 
@@ -1081,7 +1052,6 @@
                             </div>
                         </div>
 
-                        {/* Indikator Status Voice (Transcript) */}
                         {voiceTranscript && (
                             <div className="bg-gray-800 text-white p-3 rounded-lg mb-4 text-center text-sm shadow-inner break-words">
                                 {voiceTranscript}

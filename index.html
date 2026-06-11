@@ -48,12 +48,13 @@
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
         // Data URI untuk suara kosong (silence) berdurasi pendek. 
-        // Digunakan untuk merebut "Audio Focus" di Android agar Spotify/Musik lain pause.
         const SILENT_AUDIO_URI = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIAD+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAExhdmM1OC41NAAAAAAAAAAAAAAAACQAAAAAAAAAAAEgSbL2AAAAAAAAAAAA//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//MUXxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+        const SPOTIFY_EMBED_URL = 'https://open.spotify.com/embed/playlist/6dio66Z2ZaPAj4ZtoJFsoz';
+        const SPOTIFY_URI = 'spotify:playlist:6dio66Z2ZaPAj4ZtoJFsoz';
 
         const { useState, useEffect, useCallback, useRef } = React;
 
-        const DEFAULT_PLAYERS = ['Dm', 'Bd', 'Dd', 'Nr'];
+        const DEFAULT_PLAYERS = ['Jambul', 'Dado', 'Demplon', 'Kinoy'];
         const DATA_KEY = '@scoreKeeperData_web';
         const BACKUP_KEY = '@scoreKeeperBackup_web';
         const REDO_KEY = '@scoreKeeperRedo_web';
@@ -181,6 +182,87 @@
                             </div>
                         );
                     })}
+                </div>
+            );
+        };
+
+        const SpotifyPlayer = ({ embedUrl, spotifyUri, onControllerReady, isPlaying, setIsPlaying }) => {
+            const iframeRef = useRef(null);
+            const controllerRef = useRef(null);
+            const [loaded, setLoaded] = useState(false);
+
+            useEffect(() => {
+                const onReady = (SpotifyIframe) => {
+                    const iframe = iframeRef.current;
+                    if (!iframe || !SpotifyIframe) return;
+
+                    SpotifyIframe.createController(iframe, {
+                        uri: spotifyUri,
+                        width: '100%',
+                        height: '80',
+                        theme: 'black',
+                        allow: 'encrypted-media'
+                    }, (EmbedController) => {
+                        controllerRef.current = EmbedController;
+                        if (onControllerReady) {
+                            onControllerReady(EmbedController);
+                        }
+                        setLoaded(true);
+
+                        // --- PERBAIKAN: Listen to Spotify playback events ---
+                        EmbedController.addListener('playback_update', e => {
+                            if (e && e.data) {
+                                setIsPlaying(!e.data.isPaused);
+                            }
+                        });
+                    });
+                };
+
+                window.onSpotifyIframeApiReady = onReady;
+
+                const existingScript = document.querySelector('script[src="https://open.spotify.com/embed-podcast/iframe-api/v1"]');
+                if (!existingScript) {
+                    const script = document.createElement('script');
+                    script.src = 'https://open.spotify.com/embed-podcast/iframe-api/v1';
+                    script.async = true;
+                    document.body.appendChild(script);
+                } else if (window.SpotifyIframe) {
+                    onReady(window.SpotifyIframe);
+                }
+
+                return () => {
+                    if (window.onSpotifyIframeApiReady === onReady) {
+                        window.onSpotifyIframeApiReady = null;
+                    }
+                };
+            }, [spotifyUri]);
+
+            return (
+                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
+                    <h2 className="text-xl font-bold mb-3 text-[#4B0082]">🎧 Spotify Embed</h2>
+                    <iframe
+                        ref={iframeRef}
+                        title="Spotify Player"
+                        src={embedUrl}
+                        width="100%"
+                        height="80"
+                        allow="encrypted-media"
+                        frameBorder="0"
+                        className="rounded-xl overflow-hidden border border-gray-200 mb-4"
+                    />
+                    <div className="flex gap-2 justify-center">
+                        <button
+                            onClick={() => {
+                                if (!loaded || !controllerRef.current) return;
+                                controllerRef.current.togglePlay();
+                            }}
+                            className={`flex-1 font-bold py-3 rounded-lg transition-colors ${isPlaying ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-[#5D3FD3] text-white hover:bg-[#4B0082]'}`}
+                            disabled={!loaded}
+                        >
+                            {isPlaying ? 'Pause' : 'Play'}
+                        </button>
+                    </div>
+                    {!loaded && <p className="mt-3 text-sm text-gray-500 text-center">Memuat Spotify... Pastikan web sudah terhubung ke internet.</p>}
                 </div>
             );
         };
@@ -478,7 +560,6 @@
             }
         };
 
-        // --- Main App Component ---
         const App = () => {
             const [players, setPlayers] = useState(DEFAULT_PLAYERS);
             const [data, setData] = useState(null);
@@ -501,8 +582,20 @@
             const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
             const [isListening, setIsListening] = useState(false);
             const [voiceTranscript, setVoiceTranscript] = useState('');
+            const [voiceAlertsEnabled, setVoiceAlertsEnabled] = useState(true);
 
             const [sheetUrl, setSheetUrl] = useState('');
+            const [consecutiveDemplonWins, setConsecutiveDemplonWins] = useState(0);
+            const [consecutiveDadoWins, setConsecutiveDadoWins] = useState(0);
+            const [consecutiveJambulWins, setConsecutiveJambulWins] = useState(0);
+            const [consecutiveKinoyWins, setConsecutiveKinoyWins] = useState(0);
+
+            // Spotify Integration States
+            const [isSpotifyPlaying, setIsSpotifyPlaying] = useState(false);
+            const spotifyControllerRef = useRef(null);
+            const wasSpotifyPlayingRef = useRef(false);
+            const ttsActiveRef = useRef(false);
+            const currentUtteranceIdRef = useRef(null);
 
             const setNotification = useCallback((notif) => {
                 setNotificationRaw(notif);
@@ -514,7 +607,7 @@
                 }
             }, []);
 
-            // --- Fungsi Teks ke Suara (Text to Speech) dengan penanganan Audio Focus ---
+            // --- Fungsi Teks ke Suara (Text to Speech) dengan penanganan Spotify Pause/Resume ---
             const speak = useCallback((text) => {
                 if (isVoiceEnabled && 'speechSynthesis' in window) {
                     // Trik 1: Inisialisasi Web Audio API (Lebih agresif mengambil focus di Android)
@@ -545,12 +638,32 @@
                         navigator.mediaSession.playbackState = 'playing';
                     }
 
+                    // Hentikan pidato yang sedang berjalan sebelumnya
                     window.speechSynthesis.cancel();
+                    const utteranceId = Math.random();
+                    currentUtteranceIdRef.current = utteranceId;
+
+                    // Mengatur otomatis jeda/pause Spotify jika sedang memutar lagu
+                    if (!ttsActiveRef.current) {
+                        if (isSpotifyPlaying && spotifyControllerRef.current) {
+                            wasSpotifyPlayingRef.current = true;
+                            spotifyControllerRef.current.pause();
+                        } else {
+                            wasSpotifyPlayingRef.current = false;
+                        }
+                    }
+                    ttsActiveRef.current = true;
+
                     const utterance = new SpeechSynthesisUtterance(text);
                     utterance.lang = 'id-ID'; 
                     
-                    // Ketika selesai ngomong, matikan semua trik audio agar Spotify bisa resume
+                    // Ketika selesai ngomong, matikan semua trik audio & resume Spotify kembali
                     const stopFocus = () => {
+                        if (currentUtteranceIdRef.current !== utteranceId) {
+                            // Abaikan penyelesaian dari TTS sebelumnya yang sudah ter-interupsi
+                            return;
+                        }
+
                         if (osc) {
                             try { osc.stop(); } catch(e) {}
                         }
@@ -561,6 +674,22 @@
                         if ('mediaSession' in navigator) {
                             navigator.mediaSession.playbackState = 'none';
                         }
+
+                        ttsActiveRef.current = false;
+
+                        // Lanjutkan kembali pemutaran Spotify
+                        if (wasSpotifyPlayingRef.current && spotifyControllerRef.current) {
+                            setTimeout(() => {
+                                if (currentUtteranceIdRef.current === utteranceId && spotifyControllerRef.current) {
+                                    if (typeof spotifyControllerRef.current.resume === 'function') {
+                                        spotifyControllerRef.current.resume();
+                                    } else {
+                                        spotifyControllerRef.current.play();
+                                    }
+                                    wasSpotifyPlayingRef.current = false;
+                                }
+                            }, 800); // Penundaan halus 800ms
+                        }
                     };
 
                     utterance.onend = stopFocus;
@@ -568,7 +697,7 @@
 
                     window.speechSynthesis.speak(utterance);
                 }
-            }, [isVoiceEnabled]);
+            }, [isVoiceEnabled, isSpotifyPlaying]);
 
             useEffect(() => {
                 try {
@@ -625,8 +754,6 @@
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             }, []);
 
-            // --- FUNGSI UTAMA KALKULASI ---
-
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
                 if (!data) return;
                 const newData = JSON.parse(JSON.stringify(data));
@@ -669,9 +796,78 @@
                 if (buyers.length > 0) logMsg += `, beli: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
                 logHistory(logMsg);
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
-                
+
+                // Update consecutive counters for Demplon, Dado, Jambul, and Kinoy
+                let newDemplon = consecutiveDemplonWins;
+                let newDado = consecutiveDadoWins;
+                let newJambul = consecutiveJambulWins;
+                let newKinoy = consecutiveKinoyWins;
+
+                if (winner === 'Demplon') {
+                    newDemplon = consecutiveDemplonWins + 1;
+                    setConsecutiveDemplonWins(newDemplon);
+                    if (consecutiveDadoWins !== 0) setConsecutiveDadoWins(0);
+                    if (consecutiveJambulWins !== 0) setConsecutiveJambulWins(0);
+                    if (consecutiveKinoyWins !== 0) setConsecutiveKinoyWins(0);
+                } else if (winner === 'Dado') {
+                    newDado = consecutiveDadoWins + 1;
+                    setConsecutiveDadoWins(newDado);
+                    if (consecutiveDemplonWins !== 0) setConsecutiveDemplonWins(0);
+                    if (consecutiveJambulWins !== 0) setConsecutiveJambulWins(0);
+                    if (consecutiveKinoyWins !== 0) setConsecutiveKinoyWins(0);
+                } else if (winner === 'Jambul') {
+                    newJambul = consecutiveJambulWins + 1;
+                    setConsecutiveJambulWins(newJambul);
+                    if (consecutiveDemplonWins !== 0) setConsecutiveDemplonWins(0);
+                    if (consecutiveDadoWins !== 0) setConsecutiveDadoWins(0);
+                    if (consecutiveKinoyWins !== 0) setConsecutiveKinoyWins(0);
+                } else if (winner === 'Kinoy') {
+                    newKinoy = consecutiveKinoyWins + 1;
+                    setConsecutiveKinoyWins(newKinoy);
+                    if (consecutiveDemplonWins !== 0) setConsecutiveDemplonWins(0);
+                    if (consecutiveDadoWins !== 0) setConsecutiveDadoWins(0);
+                    if (consecutiveJambulWins !== 0) setConsecutiveJambulWins(0);
+                } else {
+                    if (consecutiveDemplonWins !== 0) setConsecutiveDemplonWins(0);
+                    if (consecutiveDadoWins !== 0) setConsecutiveDadoWins(0);
+                    if (consecutiveJambulWins !== 0) setConsecutiveJambulWins(0);
+                    if (consecutiveKinoyWins !== 0) setConsecutiveKinoyWins(0);
+                }
+
                 const scoreText = players.map(p => `${p} ${Math.round(newData[p].skor)}`).join(', ');
-                speak(`${winner} mendapatkan ${Math.round(totalLoss)} poin. Skor saat ini: ${scoreText}`);
+                const normalSpeech = `${winner} mendapatkan ${Math.round(totalLoss)} poin. Skor saat ini: ${scoreText}`;
+
+                // Prefer specific messages for Jambul, Kinoy, Dado, then Demplon
+                let prefix = '';
+                if (winner === 'Jambul') {
+                    if (newJambul >= 3) prefix = 'hat trick coy';
+                    else if (newJambul === 2) prefix = 'yes jambul menang lagi';
+                    else if (newJambul === 1) prefix = 'wah jambul menang';
+                } else if (winner === 'Kinoy') {
+                    if (newKinoy >= 3) prefix = 'cukup sampai disini dulu ya kinoy';
+                    else if (newKinoy === 2) prefix = 'hebat kinoy menang lagi';
+                    else if (newKinoy === 1) prefix = 'wah kinoy menang nih';
+                } else if (winner === 'Dado') {
+                    if (newDado >= 4) prefix = 'dado lagi dado lagi bosen ah';
+                    else if (newDado === 3) prefix = 'demplon tolong stop dado';
+                    else if (newDado === 2) prefix = 'biji kadut menang lagi';
+                    else if (newDado === 1) prefix = 'dado menang nih';
+                } else if (winner === 'Demplon') {
+                    if (newDemplon >= 4) prefix = 'Demplon kamu sudah bole stop dulu';
+                    else if (newDemplon === 3) prefix = 'Gile loe dro menang melulu';
+                    else if (newDemplon === 2) prefix = 'ehem demplon menang lagi';
+                    else if (newDemplon === 1) prefix = 'demplon menang nih';
+                }
+
+                if (prefix) {
+                    if (voiceAlertsEnabled) {
+                        speak(`${prefix}. ${normalSpeech}`);
+                    } else {
+                        speak(normalSpeech);
+                    }
+                } else {
+                    speak(normalSpeech);
+                }
             };
 
             const handleUpdateTeamScore = (winners, jokerHolders = [], buyers = []) => {
@@ -754,8 +950,6 @@
                 speak(`${loser} memasukkan Joker ke ${gainer}`);
                 return true; 
             };
-
-            // --- VOICE RECOGNITION LOGIC ---
 
             const parseIndonesianNumber = (str) => {
                 if (!str) return NaN;
@@ -1071,6 +1265,9 @@
                                 <button onClick={() => setIsVoiceEnabled(!isVoiceEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Toggle Feedback Suara">
                                     {isVoiceEnabled ? '🔊' : '🔇'}
                                 </button>
+                                <button onClick={() => setVoiceAlertsEnabled(!voiceAlertsEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#F59E0B] hover:text-white transition-colors" title="Toggle Voice Alerts">
+                                    {voiceAlertsEnabled ? '🔔' : '🔕'}
+                                </button>
                                 <button onClick={() => setHelpModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Bantuan">📘</button>
                                 <button onClick={handleShowDebug} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Debug">🐞</button>
                             </div>
@@ -1091,6 +1288,13 @@
                         )}
                         
                         <ScoreTable data={data} players={players} />
+                        <SpotifyPlayer 
+                            embedUrl={SPOTIFY_EMBED_URL} 
+                            spotifyUri={SPOTIFY_URI} 
+                            onControllerReady={(controller) => { spotifyControllerRef.current = controller; }}
+                            isPlaying={isSpotifyPlaying}
+                            setIsPlaying={setIsSpotifyPlaying}
+                        />
                         <WinSection 
                             players={players} 
                             onUpdateScore={handleUpdateScore} 

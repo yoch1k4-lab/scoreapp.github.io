@@ -199,7 +199,7 @@
                     SpotifyIframe.createController(iframe, {
                         uri: spotifyUri,
                         width: '100%',
-                        height: '352',
+                        height: '520',
                         theme: 'black',
                         allow: 'encrypted-media'
                     }, (EmbedController) => {
@@ -255,7 +255,7 @@
                                 title="Spotify Player"
                                 src={embedUrl}
                                 width="100%"
-                                height="352"
+                                height="520"
                                 allow="encrypted-media"
                                 frameBorder="0"
                                 className="rounded-xl overflow-hidden bg-gray-900 border border-gray-200"
@@ -856,7 +856,6 @@
                 }
 
                 const scoreText = players.map(p => `${p} ${Math.round(newData[p].skor)}`).join(', ');
-                const normalSpeech = `${winner} mendapatkan ${Math.round(totalLoss)} poin. Skor saat ini: ${scoreText}`;
 
                 // Prefer specific messages for Jambul, Kinoy, Dado, then Demplon
                 let prefix = '';
@@ -880,14 +879,17 @@
                     else if (newDemplon === 1) prefix = 'demplon menang nih';
                 }
 
+                // Jangan membaca seluruh "skor saat ini" otomatis saat mencatat kemenangan.
+                // Hanya beri notifikasi suara singkat (prefix + poin yang didapat) jika voice alerts aktif.
+                const shortSpeech = `${winner} mendapatkan ${Math.round(totalLoss)} poin.`;
                 if (prefix) {
                     if (voiceAlertsEnabled) {
-                        speak(`${prefix}. ${normalSpeech}`);
+                        speak(`${prefix}. ${shortSpeech}`);
                     } else {
-                        speak(normalSpeech);
+                        // Jika voiceAlertsDisabled, tetap tidak membacakan skor lengkap.
                     }
                 } else {
-                    speak(normalSpeech);
+                    if (voiceAlertsEnabled) speak(shortSpeech);
                 }
             };
 
@@ -939,7 +941,7 @@
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' }); return;
                 }
-                
+
                 saveData(newData);
                 let logMsg = `Tim ${winners.join(' & ')} menang`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
@@ -947,8 +949,16 @@
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
-                const scoreText = players.map(p => `${p} ${Math.round(newData[p].skor)}`).join(', ');
-                speak(`${winners.join(' dan ')} mendapatkan ${Math.round(baseGainPerWinner)} poin. Skor saat ini: ${scoreText}`);
+                // Jangan membacakan seluruh skor otomatis; cukup beri feedback singkat.
+                const shortTeamSpeech = `${winners.join(' dan ')} mendapatkan ${Math.round(baseGainPerWinner)} poin.`;
+                if (voiceAlertsEnabled) speak(shortTeamSpeech);
+            };
+
+            // Tombol / fungsi untuk membacakan skor saat diminta (skor sementara)
+            const speakCurrentScores = () => {
+                if (!data) { setNotification({ message: 'Data belum tersedia untuk dibacakan.', type: 'error' }); return; }
+                const scoreText = players.map(p => `${p} ${Math.round(data[p].skor)}`).join(', ');
+                speak(`Skor saat ini: ${scoreText}`);
             };
 
             const handleJokerTransfer = (gainer, loser) => {
@@ -1334,13 +1344,16 @@
                             </div>
                         )}
 
-                        <h1 className="text-3xl font-bold text-center mb-4 text-gray-800">📊 Tabel Skor</h1>
-                        
                         {notification.message && (
                             <div className={`p-3 rounded-lg mb-4 text-center text-sm ${notificationColors[notification.type]}`}>
                                 <p>{notification.message}</p>
                             </div>
                         )}
+                        
+                        <div className="flex items-center justify-center mb-4 relative">
+                            <h1 className="text-3xl font-bold text-gray-800">📊 Tabel Skor</h1>
+                            <button onClick={speakCurrentScores} className="w-12 h-12 rounded-full bg-white border border-[#5D3FD3] text-[#5D3FD3] text-xl flex items-center justify-center shadow-md hover:bg-purple-50 transition-colors absolute right-0" title="Baca Skor Sementara">🔊</button>
+                        </div>
                         
                         <ScoreTable data={data} players={players} />
                         

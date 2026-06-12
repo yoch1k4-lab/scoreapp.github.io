@@ -199,7 +199,7 @@
                     SpotifyIframe.createController(iframe, {
                         uri: spotifyUri,
                         width: '100%',
-                        height: '520',
+                        height: '352',
                         theme: 'black',
                         allow: 'encrypted-media'
                     }, (EmbedController) => {
@@ -255,7 +255,7 @@
                                 title="Spotify Player"
                                 src={embedUrl}
                                 width="100%"
-                                height="520"
+                                height="352"
                                 allow="encrypted-media"
                                 frameBorder="0"
                                 className="rounded-xl overflow-hidden bg-gray-900 border border-gray-200"
@@ -394,6 +394,26 @@
                     <button onClick={onRedo} className="bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 transition-colors">↪️ Redo</button>
                     <button onClick={onResetScores} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Skor</button>
                     <button onClick={onResetStakes} className="bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Reset Poin</button>
+                </div>
+            </div>
+        );
+
+        const SettingsSection = ({ onEditScores, onEditPlayers, onEditStakes, onSaveToSheet }) => (
+            <div className="bg-white rounded-xl p-4 mt-5 shadow-md">
+                <h2 className="text-xl font-bold mb-4 text-[#4B0082]">⚙️ Pengaturan & Ekspor</h2>
+                <div className="flex flex-col gap-3">
+                    <button onClick={onEditScores} className="w-full bg-white border border-[#5D3FD3] text-[#5D3FD3] font-bold py-3 px-4 rounded-lg hover:bg-purple-50 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        ✏️ Edit Skor Manual
+                    </button>
+                    <button onClick={onEditPlayers} className="w-full bg-white border border-[#5D3FD3] text-[#5D3FD3] font-bold py-3 px-4 rounded-lg hover:bg-purple-50 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        👥 Edit Nama & Jumlah Pemain
+                    </button>
+                    <button onClick={onEditStakes} className="w-full bg-white border border-gray-700 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        ⚙️ Edit Patokan Poin (N & J)
+                    </button>
+                    <button onClick={onSaveToSheet} className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 shadow-md">
+                        ☁️ Simpan ke Google Sheet
+                    </button>
                 </div>
             </div>
         );
@@ -1263,7 +1283,8 @@
                         onClose={() => setShowSpotify(false)}
                     />
 
-                    <div className="p-4 pb-24">
+                    {}
+                    <div className="p-4 pb-12">
                         <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2">
                                 <button 
@@ -1330,22 +1351,25 @@
                             setNotification={setNotification}
                         />
                         <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
+                        
+                        {/* Kolom Tindakan Cepat */}
                         <ActionsSection 
                             onUndo={handleUndo} 
                             onRedo={handleRedo} 
                             onResetScores={handleResetScores} 
                             onResetStakes={handleResetStakes}
                         />
+
+                        {/* Kolom Baru Pengaturan & Ekspor diletakkan di bawah Tindakan Cepat */}
+                        <SettingsSection 
+                            onEditScores={() => setEditModalVisible(true)}
+                            onEditPlayers={() => setEditPlayersModalVisible(true)}
+                            onEditStakes={() => setEditStakesModalVisible(true)}
+                            onSaveToSheet={() => setSheetModalVisible(true)}
+                        />
                     </div>
 
                     <EditStakesModal isVisible={editStakesModalVisible} onClose={() => setEditStakesModalVisible(false)} data={data} players={players} onSave={handleSaveStakes} />
-
-                    <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#4B0082] flex justify-around items-center shadow-lg z-50">
-                        <button onClick={() => setEditModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Skor">✏️</button>
-                        <button onClick={() => setEditPlayersModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Edit Pemain">👥</button>
-                        <button onClick={() => setEditStakesModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-gray-700 hover:text-white transition-colors" title="Edit Patokan">⚙️</button>
-                        <button onClick={() => setSheetModalVisible(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-xl font-bold shadow hover:bg-green-600 hover:text-white transition-colors" title="Save ke Sheet">☁️</button>
-                    </div>
                 </div>
             );
         };

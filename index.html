@@ -38,6 +38,15 @@
             background-color: #EF4444 !important;
             color: white !important;
         }
+
+        /* Animasi berputar untuk album art saat memutar musik */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .album-spin {
+            animation: spin 8s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-[#E9E4F5]">
@@ -186,10 +195,12 @@
             );
         };
 
+        // --- Spotify Player Berbentuk Popover & Floating Button ---
         const SpotifyPlayer = ({ embedUrl, spotifyUri, onControllerReady, isPlaying, setIsPlaying }) => {
             const iframeRef = useRef(null);
             const controllerRef = useRef(null);
             const [loaded, setLoaded] = useState(false);
+            const [showIframe, setShowIframe] = useState(false);
 
             useEffect(() => {
                 const onReady = (SpotifyIframe) => {
@@ -199,7 +210,7 @@
                     SpotifyIframe.createController(iframe, {
                         uri: spotifyUri,
                         width: '100%',
-                        height: '80',
+                        height: '352', // Mengubah tinggi Spotify menjadi 352px sesuai request
                         theme: 'black',
                         allow: 'encrypted-media'
                     }, (EmbedController) => {
@@ -209,7 +220,7 @@
                         }
                         setLoaded(true);
 
-                        // --- PERBAIKAN: Listen to Spotify playback events ---
+                        // Listen to Spotify playback events
                         EmbedController.addListener('playback_update', e => {
                             if (e && e.data) {
                                 setIsPlaying(!e.data.isPaused);
@@ -237,32 +248,63 @@
                 };
             }, [spotifyUri]);
 
+            const toggleIframeVisibility = () => {
+                setShowIframe(!showIframe);
+            };
+
+            const triggerPlayPause = (e) => {
+                e.stopPropagation(); // Mencegah terbukanya iframe saat mengklik tombol play saja
+                if (controllerRef.current) {
+                    controllerRef.current.togglePlay();
+                    setIsPlaying(!isPlaying);
+                }
+            };
+
             return (
-                <div className="bg-white rounded-xl p-4 mb-5 shadow-md">
-                    <h2 className="text-xl font-bold mb-3 text-[#4B0082]">🎧 Spotify Embed</h2>
-                    <iframe
-                        ref={iframeRef}
-                        title="Spotify Player"
-                        src={embedUrl}
-                        width="100%"
-                        height="80"
-                        allow="encrypted-media"
-                        frameBorder="0"
-                        className="rounded-xl overflow-hidden border border-gray-200 mb-4"
-                    />
-                    <div className="flex gap-2 justify-center">
-                        <button
-                            onClick={() => {
-                                if (!loaded || !controllerRef.current) return;
-                                controllerRef.current.togglePlay();
-                            }}
-                            className={`flex-1 font-bold py-3 rounded-lg transition-colors ${isPlaying ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-[#5D3FD3] text-white hover:bg-[#4B0082]'}`}
-                            disabled={!loaded}
+                <div className="fixed top-4 right-4 z-50 flex flex-col items-end">
+                    {/* Tombol Mini Floating (Bentuk Album/Play) */}
+                    <div 
+                        onClick={toggleIframeVisibility}
+                        className="bg-white rounded-full p-1.5 shadow-xl flex items-center gap-2 border border-gray-200 cursor-pointer hover:scale-105 transition-all duration-200 select-none"
+                    >
+                        {/* Album/Art Vinyl simulation */}
+                        <div className={`w-9 h-9 rounded-full bg-gradient-to-tr from-[#1DB954] to-black flex items-center justify-center relative overflow-hidden ${isPlaying ? 'album-spin' : ''}`}>
+                            <span className="text-[10px] text-white font-bold select-none">🎵</span>
+                            {/* Inner hole */}
+                            <div className="absolute w-2.5 h-2.5 bg-white rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+                        </div>
+                        
+                        {/* Mini Play / Pause Trigger */}
+                        <button 
+                            onClick={triggerPlayPause}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isPlaying ? 'bg-red-500 text-white' : 'bg-[#1DB954] text-white'}`}
                         >
-                            {isPlaying ? 'Pause' : 'Play'}
+                            {isPlaying ? '⏸️' : '▶️'}
                         </button>
                     </div>
-                    {!loaded && <p className="mt-3 text-sm text-gray-500 text-center">Memuat Spotify... Pastikan web sudah terhubung ke internet.</p>}
+
+                    {/* Popover Iframe Spotify (Height: 352px) */}
+                    {showIframe && (
+                        <div className="mt-2 w-72 md:w-80 bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 transition-all duration-300">
+                            <div className="flex justify-between items-center bg-gray-900 px-3 py-2 text-white border-b border-gray-800">
+                                <span className="text-xs font-bold flex items-center gap-1">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-[#1DB954] inline-block animate-pulse"></span>
+                                    Spotify Playlist
+                                </span>
+                                <button onClick={() => setShowIframe(false)} className="text-gray-400 hover:text-white text-sm font-bold">✕</button>
+                            </div>
+                            
+                            <div className="p-1 bg-black">
+                                <div ref={iframeRef} />
+                            </div>
+                            
+                            {!loaded && (
+                                <p className="text-[10px] text-gray-500 text-center pb-2">
+                                    Memuat Controller Spotify...
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -840,7 +882,7 @@
                 // Prefer specific messages for Jambul, Kinoy, Dado, then Demplon
                 let prefix = '';
                 if (winner === 'Jambul') {
-                    if (newJambul >= 3) prefix = 'hat trick coy';
+                    if (newJambul >= 3) prefix = 'hat trick cuy';
                     else if (newJambul === 2) prefix = 'yes jambul menang lagi';
                     else if (newJambul === 1) prefix = 'wah jambul menang';
                 } else if (winner === 'Kinoy') {
@@ -1252,14 +1294,25 @@
                     <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={confirmModal.onConfirm} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} />
 
                     <div className="p-4 pb-24">
-                        <div className="flex justify-between items-center mb-2">
-                            <button 
-                                onClick={toggleListening} 
-                                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 
-                                title="Perintah Suara (Voice Command)"
-                            >
-                                🎤
-                            </button>
+                        {/* Floating Spotify Component (Top-Right) */}
+                        <SpotifyPlayer 
+                            embedUrl={SPOTIFY_EMBED_URL} 
+                            spotifyUri={SPOTIFY_URI} 
+                            onControllerReady={(controller) => { spotifyControllerRef.current = controller; }}
+                            isPlaying={isSpotifyPlaying}
+                            setIsPlaying={setIsSpotifyPlaying}
+                        />
+
+                        <div className="flex justify-between items-center mb-2 mt-12 md:mt-2">
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={toggleListening} 
+                                    className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-colors ${isListening ? 'mic-listening' : 'bg-white text-[#4B0082] hover:bg-[#5D3FD3] hover:text-white'}`} 
+                                    title="Perintah Suara (Voice Command)"
+                                >
+                                    🎤
+                                </button>
+                            </div>
 
                             <div className="flex justify-end gap-2">
                                 <button onClick={() => setIsVoiceEnabled(!isVoiceEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Toggle Feedback Suara">
@@ -1288,13 +1341,7 @@
                         )}
                         
                         <ScoreTable data={data} players={players} />
-                        <SpotifyPlayer 
-                            embedUrl={SPOTIFY_EMBED_URL} 
-                            spotifyUri={SPOTIFY_URI} 
-                            onControllerReady={(controller) => { spotifyControllerRef.current = controller; }}
-                            isPlaying={isSpotifyPlaying}
-                            setIsPlaying={setIsSpotifyPlaying}
-                        />
+                        
                         <WinSection 
                             players={players} 
                             onUpdateScore={handleUpdateScore} 

@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Score Keeper</title>
-    <!-- React & Babel Standalone CDNs -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- React & Babel Standalone CDNs (Stable Production Releases with Crossorigin) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js" crossorigin></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -44,7 +44,8 @@
 <body class="bg-[#E9E4F5]">
     <div id="root"></div>
 
-    <script type="text/babel">
+    <!-- Added data-presets and data-type="module" to prevent ES module appendChild errors -->
+    <script type="text/babel" data-presets="env,react" data-type="module">
         // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 

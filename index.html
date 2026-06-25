@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Score Keeper</title>
+    <!-- React & Babel Standalone CDNs -->
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -66,7 +67,45 @@
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
         const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
-        // --- Initial Data Structure ---
+        // Fungsi pembungkus localStorage yang aman terhadap SecurityError di sandboxed iframe
+        const checkLocalStorage = () => {
+            try {
+                return !!window.localStorage;
+            } catch (e) {
+                return false;
+            }
+        };
+
+        const safeLocalStorage = {
+            _data: {},
+            getItem(key) {
+                if (checkLocalStorage()) {
+                    try {
+                        return window.localStorage.getItem(key);
+                    } catch (e) {}
+                }
+                return this._data[key] || null;
+            },
+            setItem(key, value) {
+                if (checkLocalStorage()) {
+                    try {
+                        window.localStorage.setItem(key, value);
+                        return;
+                    } catch (e) {}
+                }
+                this._data[key] = String(value);
+            },
+            removeItem(key) {
+                if (checkLocalStorage()) {
+                    try {
+                        window.localStorage.removeItem(key);
+                        return;
+                    } catch (e) {}
+                }
+                delete this._data[key];
+            }
+        };
+
         const getInitialData = (players = DEFAULT_PLAYERS) => {
             const data = {};
             players.forEach(player => {
@@ -75,7 +114,6 @@
             return data;
         };
 
-        // --- Shared Components ---
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
                 type="button"
@@ -146,16 +184,33 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
+                        
+                        <div className="mb-4 text-left">
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">🔗 Google Sheets Script URL</label>
+                            <input
+                                type="text"
+                                value={url}
+                                onChange={e => {
+                                    const newUrl = e.target.value;
+                                    setUrl(newUrl);
+                                    onSaveUrl(newUrl);
+                                }}
+                                placeholder="https://script.google.com/macros/s/..."
+                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#5D3FD3] transition-colors"
+                            />
+                        </div>
+
                         <div className="mb-6 text-center">
                             <p className="text-sm font-semibold text-gray-700">Status Koneksi:</p>
                             <p className={`text-sm ${url ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
-                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi di Kode"}
+                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi"}
                             </p>
                         </div>
-                        <button onClick={handleSync} disabled={isSyncing || !url} className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
+
+                        <button onClick={handleSync} disabled={isSyncing || !url} className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-2 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
                             {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
                         </button>
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">Tutup</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Tutup</button>
                     </div>
                 </div>
             );
@@ -204,7 +259,7 @@
             // Fungsi untuk mendapatkan Token dari Client Credentials Flow
             const fetchAccessToken = async () => {
                 if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || SPOTIFY_CLIENT_ID.includes("MASUKKAN")) {
-                    alert("Client ID atau Secret Spotify belum diatur di kode!");
+                    console.warn("Client ID atau Secret Spotify belum diatur di kode!");
                     return null;
                 }
                 try {
@@ -551,7 +606,7 @@
             useEffect(() => {
                 if (data && isVisible) {
                     const obj = {};
-                    players.forEach(p => { obj[p] = data[p].skor; });
+                    players.forEach(p => { obj[p] = data[p]?.skor ?? 0; });
                     setEditScores(obj);
                 }
             }, [data, isVisible, players]);
@@ -640,7 +695,7 @@
             useEffect(() => {
                 if (data && isVisible) {
                     const obj = {};
-                    players.forEach(p => { obj[p] = { n: data[p].patokan_normal, j: data[p].patokan_joker }; });
+                    players.forEach(p => { obj[p] = { n: data[p]?.patokan_normal ?? 0, j: data[p]?.patokan_joker ?? 0 }; });
                     setStakes(obj);
                 }
             }, [data, isVisible, players]);
@@ -699,7 +754,7 @@
 
         const getStack = (key) => {
             try {
-                const item = localStorage.getItem(key);
+                const item = safeLocalStorage.getItem(key);
                 if (!item) return [];
                 const parsed = JSON.parse(item);
                 return Array.isArray(parsed) ? parsed : [];
@@ -850,12 +905,12 @@
 
             useEffect(() => {
                 try {
-                    const jsonPlayers = localStorage.getItem(PLAYER_KEY);
+                    const jsonPlayers = safeLocalStorage.getItem(PLAYER_KEY);
                     const loadedPlayers = jsonPlayers ? JSON.parse(jsonPlayers) : DEFAULT_PLAYERS;
                     setPlayers(loadedPlayers);
-                    const jsonData = localStorage.getItem(DATA_KEY);
+                    const jsonData = safeLocalStorage.getItem(DATA_KEY);
                     setData(jsonData ? JSON.parse(jsonData) : getInitialData(loadedPlayers));
-                    const savedSheetUrl = localStorage.getItem(SHEETS_KEY);
+                    const savedSheetUrl = safeLocalStorage.getItem(SHEETS_KEY);
                     setSheetUrl(savedSheetUrl || PREFILLED_SHEET_URL || '');
                 } catch (e) {
                     setPlayers(DEFAULT_PLAYERS);
@@ -869,22 +924,22 @@
                         let undoStack = getStack(BACKUP_KEY);
                         undoStack.push(data);
                         if (undoStack.length > 5) undoStack.shift();
-                        localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                        localStorage.removeItem(REDO_KEY);
+                        safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                        safeLocalStorage.removeItem(REDO_KEY);
                     }
-                    localStorage.setItem(DATA_KEY, JSON.stringify(newData));
+                    safeLocalStorage.setItem(DATA_KEY, JSON.stringify(newData));
                     setData(newData);
                 } catch (e) {
                     setNotification({ message: 'Error saving data!', type: 'error' });
                 }
             }, [data, setNotification]);
 
-            const handleSaveSheetUrl = (url) => { setSheetUrl(url); localStorage.setItem(SHEETS_KEY, url); };
+            const handleSaveSheetUrl = (url) => { setSheetUrl(url); safeLocalStorage.setItem(SHEETS_KEY, url); };
             
             const handleSyncToSheets = async (targetUrl) => {
                 if (!data) return;
                 const scoresMap = {};
-                players.forEach(p => scoresMap[p] = data[p].skor);
+                players.forEach(p => scoresMap[p] = data[p]?.skor ?? 0);
                 const payload = { players: players, scores: scoresMap };
                 try {
                     await fetch(targetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -898,9 +953,9 @@
             const logHistory = useCallback((text) => {
                 const time = new Date().toLocaleString('id-ID', { hour12: false });
                 const newEntry = `[${time}] ${text}`;
-                const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                const currentHistory = JSON.parse(safeLocalStorage.getItem(HISTORY_KEY) || '[]');
                 const updatedHistory = [newEntry, ...currentHistory].slice(50);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+                safeLocalStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             }, []);
 
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
@@ -909,7 +964,7 @@
                 const key = isJoker ? 'patokan_joker' : 'patokan_normal';
                 
                 for (const p of players) {
-                    if (newData[p][key] <= 0) {
+                    if (!newData[p] || newData[p][key] <= 0) {
                         setNotification({message: `⚠️ Gagal! ${p} belum set nilai ${isJoker ? 'Joker' : 'Normal'}.`, type: 'error'});
                         return;
                     }
@@ -919,21 +974,25 @@
                 let totalLoss = 0;
 
                 losers.forEach(loser => {
-                    const normalStake = newData[loser].patokan_normal;
-                    const jokerStake = newData[loser].patokan_joker;
-                    let baseLoss = newData[loser][key];
+                    const normalStake = newData[loser]?.patokan_normal ?? 0;
+                    const jokerStake = newData[loser]?.patokan_joker ?? 0;
+                    let baseLoss = newData[loser]?.[key] ?? 0;
                     let jokerPenaltyCalc = jokerHolders.includes(loser) ? (jokerStake - normalStake) : 0;
                     const buyerInfo = buyers.find(b => b.name === loser);
                     let buyPenaltyCalc = buyerInfo ? buyerInfo.amount * normalStake : 0;
                     let loss = baseLoss + jokerPenaltyCalc + buyPenaltyCalc;
                     if (isWin2) loss *= 2;
-                    newData[loser].skor -= loss;
+                    if (newData[loser]) {
+                        newData[loser].skor -= loss;
+                    }
                     totalLoss += loss;
                 });
 
-                newData[winner].skor += totalLoss;
+                if (newData[winner]) {
+                    newData[winner].skor += totalLoss;
+                }
 
-                const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
+                const totalCheck = players.reduce((sum, p) => sum + (newData[p]?.skor ?? 0), 0);
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' });
                     return;
@@ -983,8 +1042,6 @@
                     if (consecutiveKinoyWins !== 0) setConsecutiveKinoyWins(0);
                 }
 
-                const scoreText = players.map(p => `${p} ${Math.round(newData[p].skor)}`).join(', ');
-
                 // Prefer specific messages for Jambul, Kinoy, Dado, then Demplon
                 let prefix = '';
                 if (winner === 'Jambul') {
@@ -1007,14 +1064,11 @@
                     else if (newDemplon === 1) prefix = 'demplon menang nih';
                 }
 
-                // Jangan membaca seluruh "skor saat ini" otomatis saat mencatat kemenangan.
                 // Hanya beri notifikasi suara singkat (prefix + poin yang didapat) jika voice alerts aktif.
                 const shortSpeech = `${winner} mendapatkan ${Math.round(totalLoss)} poin.`;
                 if (prefix) {
                     if (voiceAlertsEnabled) {
                         speak(`${prefix}. ${shortSpeech}`);
-                    } else {
-                        // Jika voiceAlertsDisabled, tetap tidak membacakan skor lengkap.
                     }
                 } else {
                     if (voiceAlertsEnabled) speak(shortSpeech);
@@ -1025,7 +1079,7 @@
                 if (!data) return;
                 let newData = JSON.parse(JSON.stringify(data));
                 for (const p of players) {
-                    if (newData[p].patokan_normal <= 0) {
+                    if (!newData[p] || newData[p].patokan_normal <= 0) {
                         setNotification({ message: `⚠️ Gagal! ${p} belum set nilai Normal.`, type: 'error' });
                         return;
                     }
@@ -1036,20 +1090,25 @@
                 if (winnerBuyers.length > 1) {
                     setNotification({ message: `❌ Hanya satu pemenang yang boleh buy.`, type: 'error' }); return;
                 }
-                const totalNormalStake = players.reduce((sum, p) => sum + newData[p].patokan_normal, 0);
+                const totalNormalStake = players.reduce((sum, p) => sum + (newData[p]?.patokan_normal ?? 0), 0);
                 const baseChange = totalNormalStake / players.length;
                 let totalJokerPenalty = 0;
-                jokerHolders.forEach(jh => { totalJokerPenalty += newData[jh].patokan_joker - newData[jh].patokan_normal; });
+                jokerHolders.forEach(jh => { 
+                    totalJokerPenalty += (newData[jh]?.patokan_joker ?? 0) - (newData[jh]?.patokan_normal ?? 0); 
+                });
                 let totalLoserBuyPenalty = 0;
-                loserBuyers.forEach(b => { totalLoserBuyPenalty += b.amount * newData[b.name].patokan_normal; });
+                loserBuyers.forEach(b => { 
+                    totalLoserBuyPenalty += b.amount * (newData[b.name]?.patokan_normal ?? 0); 
+                });
                 
                 losers.forEach(loser => {
                     let currentLoss = baseChange;
-                    const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
+                    const jokerPenaltyCalc = jokerHolders.includes(loser) ? ((newData[loser]?.patokan_joker ?? 0) - (newData[loser]?.patokan_normal ?? 0)) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
-                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
-                    currentLoss += jokerPenaltyCalc + finalBuyPenalty;
-                    newData[loser].skor -= currentLoss;
+                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * (newData[loser]?.patokan_normal ?? 0) : 0;
+                    if (newData[loser]) {
+                        newData[loser].skor -= currentLoss + jokerPenaltyCalc + finalBuyPenalty;
+                    }
                 });
                 
                 const totalGainFromLosers = totalJokerPenalty + totalLoserBuyPenalty;
@@ -1058,14 +1117,16 @@
                 if (winnerBuyers.length === 1 && winners.length === 2) {
                     const winnerBuyer = winnerBuyers[0];
                     const otherWinner = winners.find(w => w !== winnerBuyer.name);
-                    const transferAmount = (newData[winnerBuyer.name].patokan_normal * winnerBuyer.amount) / winners.length;
-                    newData[winnerBuyer.name].skor += baseGainPerWinner - transferAmount;
-                    newData[otherWinner].skor += baseGainPerWinner + transferAmount;
+                    const transferAmount = ((newData[winnerBuyer.name]?.patokan_normal ?? 0) * winnerBuyer.amount) / winners.length;
+                    if (newData[winnerBuyer.name]) newData[winnerBuyer.name].skor += baseGainPerWinner - transferAmount;
+                    if (newData[otherWinner]) newData[otherWinner].skor += baseGainPerWinner + transferAmount;
                 } else {
-                    winners.forEach(winner => { newData[winner].skor += baseGainPerWinner; });
+                    winners.forEach(winner => { 
+                        if (newData[winner]) newData[winner].skor += baseGainPerWinner; 
+                    });
                 }
                 
-                const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
+                const totalCheck = players.reduce((sum, p) => sum + (newData[p]?.skor ?? 0), 0);
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' }); return;
                 }
@@ -1077,7 +1138,6 @@
                 logHistory(logMsg);
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
-                // Jangan membacakan seluruh skor otomatis; cukup beri feedback singkat.
                 const shortTeamSpeech = `${winners.join(' dan ')} mendapatkan ${Math.round(baseGainPerWinner)} poin.`;
                 if (voiceAlertsEnabled) speak(shortTeamSpeech);
             };
@@ -1085,7 +1145,7 @@
             // Tombol / fungsi untuk membacakan skor saat diminta (skor sementara)
             const speakCurrentScores = () => {
                 if (!data) { setNotification({ message: 'Data belum tersedia untuk dibacakan.', type: 'error' }); return; }
-                const scoreText = players.map(p => `${p} ${Math.round(data[p].skor)}`).join(', ');
+                const scoreText = players.map(p => `${p} ${Math.round(data[p]?.skor ?? 0)}`).join(', ');
                 speak(`Skor saat ini: ${scoreText}`);
             };
 
@@ -1095,7 +1155,7 @@
                     setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'}); return false;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
-                if (newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
+                if (!newData[loser] || !newData[gainer] || newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
                     setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'}); return false;
                 }
                 const transferAmount = newData[loser].patokan_joker - newData[loser].patokan_normal;
@@ -1253,7 +1313,9 @@
                     onConfirm: () => {
                         if (!data) return;
                         const newData = JSON.parse(JSON.stringify(data));
-                        players.forEach(p => (newData[p].skor = 0));
+                        players.forEach(p => {
+                            if (newData[p]) newData[p].skor = 0;
+                        });
                         saveData(newData);
                         logHistory("Semua skor direset ke 0.");
                         setNotification({ message: "🔄 Semua skor berhasil direset ke 0.", type: 'success' });
@@ -1269,7 +1331,12 @@
                     onConfirm: () => {
                         if (!data) return;
                         const newData = JSON.parse(JSON.stringify(data));
-                        players.forEach(p => { newData[p].patokan_normal = 0; newData[p].patokan_joker = 0; });
+                        players.forEach(p => { 
+                            if (newData[p]) {
+                                newData[p].patokan_normal = 0; 
+                                newData[p].patokan_joker = 0; 
+                            }
+                        });
                         saveData(newData);
                         logHistory("Semua patokan poin direset ke 0.");
                         setNotification({ message: "🧮 Semua patokan poin berhasil direset.", type: 'success' });
@@ -1283,9 +1350,9 @@
                 const previousData = undoStack.pop();
                 let redoStack = getStack(REDO_KEY);
                 if (data) redoStack.push(data);
-                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-                localStorage.setItem(DATA_KEY, JSON.stringify(previousData));
+                safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                safeLocalStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                safeLocalStorage.setItem(DATA_KEY, JSON.stringify(previousData));
                 setData(previousData);
                 logHistory("Perubahan terakhir dibatalkan (undo).");
                 setNotification({ message: "↩️ Undo berhasil!", type: 'success' });
@@ -1297,9 +1364,9 @@
                 const nextData = redoStack.pop();
                 let undoStack = getStack(BACKUP_KEY);
                 if (data) undoStack.push(data);
-                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                localStorage.setItem(DATA_KEY, JSON.stringify(nextData));
+                safeLocalStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                safeLocalStorage.setItem(DATA_KEY, JSON.stringify(nextData));
                 setData(nextData);
                 logHistory("Perubahan terakhir diulang (redo).");
                 setNotification({ message: "➡️ Redo berhasil!", type: 'success' });
@@ -1310,7 +1377,7 @@
                 try {
                     const undoStack = getStack(BACKUP_KEY);
                     const prevData = undoStack.length > 0 ? undoStack[undoStack.length - 1] : {};
-                    const currData = JSON.parse(localStorage.getItem(DATA_KEY) || "{}");
+                    const currData = JSON.parse(safeLocalStorage.getItem(DATA_KEY) || "{}");
                     detail += `<div class='font-bold mb-2'>Detail perubahan skor round terakhir:</div>`;
                     players.forEach(p => {
                         const prev = prevData[p]?.skor ?? 0;
@@ -1344,7 +1411,9 @@
                     return;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
-                players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
+                players.forEach(p => { 
+                    if (newData[p]) newData[p].skor = parseFloat(editScores[p]); 
+                });
                 saveData(newData);
                 setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
                 setEditModalVisible(false);
@@ -1353,7 +1422,7 @@
             const handleSavePlayers = (editPlayers) => {
                 let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
                 if (validPlayers.length < 2) { setNotification({message:"Minimal 2 pemain!", type:"error"}); return; }
-                localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
+                safeLocalStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
                 setPlayers(validPlayers);
                 let newData = getInitialData(validPlayers);
                 validPlayers.forEach(p => { if (data && data[p]) newData[p] = {...data[p]}; });
@@ -1364,8 +1433,10 @@
             const handleSaveStakes = (stakes) => {
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => {
-                    newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
-                    newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
+                    if (newData[p]) {
+                        newData[p].patokan_normal = Math.round(parseFloat(stakes[p]?.n) || 0);
+                        newData[p].patokan_joker = Math.round(parseFloat(stakes[p]?.j) || 0);
+                    }
                 });
                 saveData(newData);
                 setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});

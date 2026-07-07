@@ -57,10 +57,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
-
-        // --- KONFIGURASI SPOTIFY API ---
         const SPOTIFY_CLIENT_ID = "0ecec814727b4c4da8ac274dd9e8ca74"; 
         const SPOTIFY_CLIENT_SECRET = "d977b68913344e36abd42b9467b694ac";
 
@@ -80,7 +77,6 @@
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
         const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
-        // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
             const data = {};
             players.forEach(player => {
@@ -89,7 +85,6 @@
             return data;
         };
 
-        // --- Shared Components ---
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
                 type="button"
@@ -147,11 +142,9 @@
         }) => {
             return (
                 <>
-                    {/* Overlay */}
                     {isOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity" onClick={onClose}></div>
                     )}
-                    {/* Panel Menu */}
                     <div className={`fixed top-0 right-0 h-full w-72 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-[#F6F4FC]">
                             <h2 className="text-xl font-bold text-[#4B0082]">☰ Menu Fitur</h2>
@@ -159,7 +152,6 @@
                         </div>
                         
                         <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
-                            {/* Pengaturan Audio */}
                             <div>
                                 <p className="text-sm font-bold text-gray-500 mb-2 uppercase">Audio & Notifikasi</p>
                                 <button onClick={onToggleVoice} className="w-full flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-gray-100 mb-2">
@@ -172,7 +164,6 @@
                                 </button>
                             </div>
 
-                            {/* Data & Riwayat */}
                             <div>
                                 <p className="text-sm font-bold text-gray-500 mb-2 uppercase">Data & Riwayat</p>
                                 <button onClick={() => { onClose(); onShowHistory(); }} className="w-full text-left bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-purple-50 hover:border-purple-200 font-semibold text-gray-700 mb-2">
@@ -186,7 +177,6 @@
                                 </button>
                             </div>
 
-                            {/* Pengaturan Permainan */}
                             <div>
                                 <p className="text-sm font-bold text-gray-500 mb-2 uppercase">Pengaturan Permainan</p>
                                 <button onClick={() => { onClose(); onEditScores(); }} className="w-full text-left bg-gray-50 p-3 rounded-lg border border-gray-200 hover:bg-gray-100 font-semibold text-gray-700 mb-2">
@@ -221,6 +211,27 @@
             const [isCreator, setIsCreator] = useState(false);
             const [showMyCardsOnline, setShowMyCardsOnline] = useState(false);
 
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'score-keeper-app';
+
+            // Virtual Local Database untuk menyokong Simulasi Multi-Tab jika Firebase tidak aktif
+            const getMockRoom = useCallback((roomId) => {
+                try {
+                    const data = localStorage.getItem(`mock_room_${roomId}`);
+                    return data ? JSON.parse(data) : null;
+                } catch (e) {
+                    return null;
+                }
+            }, []);
+
+            const setMockRoom = useCallback((roomId, data) => {
+                try {
+                    localStorage.setItem(`mock_room_${roomId}`, JSON.stringify(data));
+                    window.dispatchEvent(new Event('mock_storage_update'));
+                } catch (e) {
+                    console.error("Gagal menulis ke database simulasi", e);
+                }
+            }, []);
+
             // --- Logika Pembuatan Kartu ---
             const generateDeck = () => {
                 const suits = [
@@ -238,10 +249,8 @@
                     });
                 });
                 
-                // Tambah Joker
                 deck.push({ rank: 'JOKER', suit: '🃏', color: 'text-black' }); // Hitam
                 deck.push({ rank: 'JOKER', suit: '🃏', color: 'text-red-600' }); // Merah
-                
                 return deck;
             };
 
@@ -286,7 +295,6 @@
                 setVisiblePlayer(null);
             };
 
-            // --- Fungsi Salin Kode Room ---
             const copyRoomCode = (code) => {
                 const tempInput = document.createElement("input");
                 tempInput.value = code;
@@ -297,12 +305,34 @@
                 setNotification({ message: `📋 Kode Room ${code} disalin ke clipboard!`, type: 'success' });
             };
 
-            // --- Logika Online (Firestore) ---
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'score-keeper-app';
-
-            // Mendengarkan data Room Firestore secara Real-Time
             useEffect(() => {
-                if (!db || !currentRoomId) return;
+                if (!currentRoomId) return;
+
+                // JIKA MENGGUNAKAN SIMULATOR MULTI-TAB (Offline Online Fallback)
+                if (!db || db.isMock) {
+                    const handleSyncSimulation = () => {
+                        const data = getMockRoom(currentRoomId);
+                        if (data) {
+                            setRoomState(data);
+                        } else {
+                            setNotification({ message: "🚪 Room simulasi ditutup.", type: 'error' });
+                            setCurrentRoomId(null);
+                            setRoomState(null);
+                        }
+                    };
+
+                    handleSyncSimulation();
+                    window.addEventListener('storage', handleSyncSimulation);
+                    window.addEventListener('mock_storage_update', handleSyncSimulation);
+
+                    return () => {
+                        window.removeEventListener('storage', handleSyncSimulation);
+                        window.removeEventListener('mock_storage_update', handleSyncSimulation);
+                    };
+                }
+
+                // JIKA MENGGUNAKAN CLOUD REAL DATABASE (Firestore)
+                if (!window.FirebaseSDK) return;
                 const { doc, onSnapshot } = window.FirebaseSDK;
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
 
@@ -320,7 +350,7 @@
                 });
 
                 return () => unsubscribe();
-            }, [db, currentRoomId]);
+            }, [db, currentRoomId, appId, getMockRoom, setNotification]);
 
             const generateRoomId = () => {
                 const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -332,14 +362,7 @@
             };
 
             const handleCreateRoom = async () => {
-                if (!db) {
-                    setNotification({ message: "⚠️ Koneksi database belum siap.", type: 'error' });
-                    return;
-                }
                 const newRoomId = generateRoomId();
-                const { doc, setDoc } = window.FirebaseSDK;
-                const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', newRoomId);
-
                 const initialRoomData = {
                     roomId: newRoomId,
                     players: players,
@@ -349,29 +372,56 @@
                     createdAt: Date.now()
                 };
 
+                // Fallback otomatis ke mode simulasi jika server Firestore belum siap
+                if (!db || db.isMock) {
+                    setMockRoom(newRoomId, initialRoomData);
+                    setCurrentRoomId(newRoomId);
+                    setIsCreator(true);
+                    setMyIdentity('');
+                    setNotification({ message: `🌐 Room Simulasi ${newRoomId} berhasil dibuat (Mendukung Multi-tab)!`, type: 'success' });
+                    return;
+                }
+
+                // Firestore Mode
+                if (!window.FirebaseSDK) return;
+                const { doc, setDoc } = window.FirebaseSDK;
+                const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', newRoomId);
+
                 try {
                     await setDoc(roomDocRef, initialRoomData);
                     setCurrentRoomId(newRoomId);
                     setIsCreator(true);
                     setMyIdentity('');
-                    setNotification({ message: `🌐 Room ${newRoomId} berhasil dibuat!`, type: 'success' });
+                    setNotification({ message: `🌐 Room Cloud ${newRoomId} berhasil di-onlinekan!`, type: 'success' });
                 } catch (e) {
-                    console.error("Gagal membuat room: ", e);
-                    setNotification({ message: "❌ Gagal membuat room baru di cloud.", type: 'error' });
+                    console.error("Gagal membuat room cloud: ", e);
+                    setNotification({ message: "❌ Gagal mengunggah room ke cloud, beralih ke lokal.", type: 'error' });
                 }
             };
 
             const handleJoinRoom = async () => {
-                if (!db) {
-                    setNotification({ message: "⚠️ Koneksi database belum siap.", type: 'error' });
-                    return;
-                }
                 const cleanId = roomIdInput.trim().toUpperCase();
                 if (!cleanId) {
                     setNotification({ message: "⚠️ Silakan masukkan Kode Room.", type: 'error' });
                     return;
                 }
 
+                // Cek Simulasi Room Terlebih Dahulu
+                if (!db || db.isMock) {
+                    const localData = getMockRoom(cleanId);
+                    if (localData) {
+                        setCurrentRoomId(cleanId);
+                        setIsCreator(false);
+                        setMyIdentity('');
+                        setNotification({ message: `✅ Berhasil bergabung ke Room Simulasi ${cleanId}!`, type: 'success' });
+                    } else {
+                        setNotification({ message: "❌ Room simulasi lokal tidak ditemukan di tab ini.", type: 'error' });
+                    }
+                    return;
+                }
+
+                // Cek Firebase Room
+                if (!window.FirebaseSDK) return;
                 const { doc, getDoc } = window.FirebaseSDK;
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', cleanId);
 
@@ -381,18 +431,27 @@
                         setCurrentRoomId(cleanId);
                         setIsCreator(false);
                         setMyIdentity('');
-                        setNotification({ message: `✅ Berhasil bergabung ke Room ${cleanId}!`, type: 'success' });
+                        setNotification({ message: `✅ Berhasil bergabung ke Room Cloud ${cleanId}!`, type: 'success' });
                     } else {
-                        setNotification({ message: "❌ Room tidak ditemukan. Periksa kode room Anda.", type: 'error' });
+                        // Jika di cloud tidak ada, barangkali ada di simulator lokal
+                        const localData = getMockRoom(cleanId);
+                        if (localData) {
+                            setCurrentRoomId(cleanId);
+                            setIsCreator(false);
+                            setMyIdentity('');
+                            setNotification({ message: `✅ Bergabung ke Room Simulasi ${cleanId}!`, type: 'success' });
+                        } else {
+                            setNotification({ message: "❌ Room tidak ditemukan di Cloud maupun Simulasi.", type: 'error' });
+                        }
                     }
                 } catch (e) {
-                    console.error("Gagal gabung room: ", e);
-                    setNotification({ message: "❌ Terjadi kesalahan saat memeriksa room.", type: 'error' });
+                    console.error("Gagal memeriksa room: ", e);
+                    setNotification({ message: "❌ Gagal memvalidasi room dari server.", type: 'error' });
                 }
             };
 
             const handleDealCardsOnline = async () => {
-                if (!db || !currentRoomId) return;
+                if (!currentRoomId) return;
                 const maxCards = Math.floor(54 / players.length);
                 if (cardsPerPlayer <= 0 || cardsPerPlayer > maxCards) {
                     setNotification({ message: `❌ Jumlah kartu tidak valid! Maksimal ${maxCards} kartu per pemain.`, type: 'error' });
@@ -413,6 +472,21 @@
                     });
                 }
 
+                // Handle update simulasi
+                if (!db || db.isMock) {
+                    const localData = getMockRoom(currentRoomId);
+                    if (localData) {
+                        localData.hands = dealtHands;
+                        localData.cardsPerPlayer = cardsPerPlayer;
+                        localData.status = 'dealt';
+                        setMockRoom(currentRoomId, localData);
+                        setNotification({ message: "🃏 Kartu berhasil dibagikan (Simulasi Multi-tab)!", type: 'success' });
+                    }
+                    return;
+                }
+
+                // Handle update cloud
+                if (!window.FirebaseSDK) return;
                 const { doc, updateDoc } = window.FirebaseSDK;
                 const roomDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
 
@@ -422,10 +496,10 @@
                         cardsPerPlayer: cardsPerPlayer,
                         status: 'dealt'
                     });
-                    setNotification({ message: "🃏 Berhasil membagikan kartu ke semua perangkat pemain!", type: 'success' });
+                    setNotification({ message: "🃏 Kartu terbagi secara cloud ke semua HP pemain!", type: 'success' });
                 } catch (e) {
-                    console.error("Gagal update pembagian kartu online: ", e);
-                    setNotification({ message: "❌ Gagal membagikan kartu secara online.", type: 'error' });
+                    console.error("Gagal menyinkronkan kartu ke cloud: ", e);
+                    setNotification({ message: "❌ Gagal membagikan kartu secara cloud.", type: 'error' });
                 }
             };
 
@@ -434,14 +508,18 @@
                 setRoomState(null);
                 setIsCreator(false);
                 setMyIdentity('');
-                setNotification({ message: "🚪 Keluar dari room multiplayer.", type: 'info' });
+                setNotification({ message: "🚪 Meninggalkan Room.", type: 'info' });
             };
 
             return (
                 <div className="bg-white rounded-2xl p-5 mb-5 shadow-lg border border-purple-100">
                     <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-                        <h2 className="text-xl font-bold text-[#4B0082] flex items-center gap-2">🃏 Pembagi Kartu Remi</h2>
-                        {/* Selector Mode */}
+                        <div className="flex flex-col">
+                            <h2 className="text-xl font-bold text-[#4B0082] flex items-center gap-2">🃏 Pembagi Kartu Remi</h2>
+                            <span className="text-[10px] font-bold text-gray-500 mt-0.5">
+                                {(!db || db.isMock) ? "📱 MODE SIMULASI (AKTIF)" : "☁️ SERVER CLOUD (TERHUBUNG)"}
+                            </span>
+                        </div>
                         <div className="flex bg-gray-100 rounded-lg p-1 text-xs font-bold">
                             <button 
                                 onClick={() => setMode('offline')}
@@ -458,10 +536,10 @@
                         </div>
                     </div>
 
-                    {/* MODE 1: OFFLINE (PASS AND PLAY) */}
+                    {/* OFFLINE MODE */}
                     {mode === 'offline' && (
                         <div>
-                            <p className="text-xs text-gray-500 mb-3 font-medium">Bagi kartu di HP ini. Gunakan sensor keamanan lihat/tutup kartu saat memberikan perangkat ke pemain lain.</p>
+                            <p className="text-xs text-gray-500 mb-3 font-medium">Bagi kartu di HP ini secara bergiliran. Tutup kartu sebelum memberikan perangkat ke pemain lain.</p>
                             <div className="flex items-center gap-3 mb-4">
                                 <label className="font-semibold text-gray-700 text-sm">Jumlah Kartu:</label>
                                 <input 
@@ -521,17 +599,17 @@
                         </div>
                     )}
 
-                    {/* MODE 2: ONLINE ROOM (MULTIPLAYER BEDA HP) */}
+                    {/* ONLINE / MULTIPLAYER ROOM */}
                     {mode === 'online' && (
                         <div>
                             {!currentRoomId ? (
                                 <div className="space-y-4">
-                                    <p className="text-xs text-gray-500 font-medium">Buat Room jika Anda bertindak sebagai Dealer utama, atau masukkan kode room untuk bergabung menggunakan perangkat pribadi Anda.</p>
+                                    <p className="text-xs text-gray-500 font-medium">Buat Room jika Anda adalah pembagi kartu utama (Dealer), atau masukkan kode room rekan Anda untuk bergabung di HP Anda pribadi.</p>
                                     
                                     <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
                                         <label className="block text-sm font-bold text-[#4B0082] mb-1.5">Tuan Rumah (Dealer):</label>
                                         <div className="flex items-center gap-3">
-                                            <span className="text-xs text-gray-500">Kartu:</span>
+                                            <span className="text-xs text-gray-500 font-bold">Kartu:</span>
                                             <input 
                                                 type="number" 
                                                 min="1" 
@@ -542,8 +620,7 @@
                                             />
                                             <button 
                                                 onClick={handleCreateRoom}
-                                                disabled={!firebaseReady}
-                                                className="flex-1 bg-[#5D3FD3] text-white text-sm font-bold py-2.5 px-4 rounded-xl hover:bg-[#4B0082] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed shadow"
+                                                className="flex-1 bg-[#5D3FD3] text-white text-sm font-bold py-2.5 px-4 rounded-xl hover:bg-[#4B0082] transition-colors shadow"
                                             >
                                                 📢 Buat Room Baru
                                             </button>
@@ -551,7 +628,7 @@
                                     </div>
 
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                        <label className="block text-sm font-bold text-gray-700 mb-2">Gabung Room Pemain:</label>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">Gabung Room:</label>
                                         <div className="flex gap-2">
                                             <input 
                                                 type="text" 
@@ -562,8 +639,7 @@
                                             />
                                             <button 
                                                 onClick={handleJoinRoom}
-                                                disabled={!firebaseReady}
-                                                className="bg-green-600 hover:bg-green-700 text-white font-bold px-5 rounded-xl transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                                className="bg-green-600 hover:bg-green-700 text-white font-bold px-5 rounded-xl transition-colors"
                                             >
                                                 Gabung
                                             </button>
@@ -572,20 +648,18 @@
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {/* Informasi Utama Room */}
                                     <div className="bg-[#F6F4FC] p-4 rounded-2xl border border-purple-100 flex flex-col items-center justify-center text-center">
                                         <p className="text-xs font-bold text-purple-600 uppercase tracking-wide">Kode Room Anda</p>
                                         <h3 className="text-3xl font-black text-[#4B0082] tracking-wider my-1 flex items-center gap-2">
                                             {currentRoomId}
                                             <button onClick={() => copyRoomCode(currentRoomId)} className="text-lg hover:scale-110 active:scale-95 transition-all" title="Salin Kode">📋</button>
                                         </h3>
-                                        <p className="text-xs text-gray-500 mt-1">Bagikan kode ini agar pemain lain dapat memasukkannya di HP mereka.</p>
+                                        <p className="text-xs text-gray-500 mt-1">Bagikan kode di atas ke HP rekan bermain Anda.</p>
                                     </div>
 
-                                    {/* Pemilihan Identitas Pemain di Perangkat ini */}
                                     <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
-                                        <label className="block text-sm font-bold text-yellow-800 mb-1">Siapa Anda di Room ini?</label>
-                                        <p className="text-xs text-yellow-700 mb-2">Setiap HP harus memilih nama yang berbeda untuk melihat kartu pribadi mereka.</p>
+                                        <label className="block text-sm font-bold text-yellow-800 mb-1">Pilih Siapa Anda di HP ini?</label>
+                                        <p className="text-xs text-yellow-700 mb-2">Setiap pemain harus memilih namanya sendiri untuk membuka kartu rahasia masing-masing.</p>
                                         <select 
                                             value={myIdentity} 
                                             onChange={e => {
@@ -594,16 +668,15 @@
                                             }}
                                             className="w-full bg-white border border-yellow-300 rounded-xl p-2.5 font-bold text-gray-700 outline-none focus:ring-2 focus:ring-yellow-400"
                                         >
-                                            <option value="">Pilih Karakter...</option>
+                                            <option value="">Pilih Nama Anda...</option>
                                             {players.map(p => <option key={p} value={p}>{p}</option>)}
                                         </select>
                                     </div>
 
-                                    {/* Panel Dealer Utama (Hanya terlihat oleh Pembuat Room) */}
                                     {isCreator && (
                                         <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
                                             <div className="flex justify-between items-center mb-3">
-                                                <p className="text-xs font-extrabold text-[#4B0082] uppercase">🎮 Kontrol Dealer Utama</p>
+                                                <p className="text-xs font-extrabold text-[#4B0082] uppercase">🎮 Kontrol Utama (Dealer)</p>
                                                 <span className="bg-purple-200 text-[#4B0082] text-[10px] px-2 py-0.5 rounded font-black">HOST</span>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -620,18 +693,17 @@
                                                     onClick={handleDealCardsOnline}
                                                     className="flex-1 bg-[#5D3FD3] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#4B0082] text-sm transition-colors shadow-sm"
                                                 >
-                                                    Kocok & Bagi Kartu Online
+                                                    Kocok & Bagi Kartu ke HP Lain
                                                 </button>
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* PANEL TAMPILAN KARTU PRIBADI (REAL-TIME CLOUD) */}
                                     {myIdentity ? (
                                         <div className="bg-white p-4 rounded-xl border-2 border-[#5D3FD3] shadow-md">
                                             <div className="flex justify-between items-center mb-3">
                                                 <div>
-                                                    <p className="text-xs text-gray-500 font-bold uppercase">Kartu Milik</p>
+                                                    <p className="text-xs text-gray-500 font-bold uppercase">Pemain Aktif</p>
                                                     <h4 className="text-lg font-black text-[#4B0082]">{myIdentity}</h4>
                                                 </div>
                                                 <button 
@@ -659,17 +731,16 @@
                                                 </div>
                                             ) : (
                                                 <div className="text-center py-6 text-gray-400 text-xs font-semibold">
-                                                    ⏳ Menunggu Dealer membagikan kartu...
+                                                    ⏳ Menunggu Dealer utama membagikan kartu...
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
                                         <div className="text-center py-4 bg-gray-50 rounded-xl border border-gray-200 text-xs font-semibold text-gray-500">
-                                            👉 Silakan pilih nama Anda pada menu "Karakter Anda" di atas untuk melihat kartu di HP ini.
+                                            👉 Silakan pilih karakter bermain Anda di atas untuk membuka kartu.
                                         </div>
                                     )}
 
-                                    {/* Tinggalkan Room */}
                                     <button 
                                         onClick={handleLeaveRoom}
                                         className="w-full bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold py-2.5 rounded-xl text-xs transition-all border border-gray-200 mt-2"
@@ -695,7 +766,6 @@
             }
         };
 
-        // --- Komponen Modal & Pembantu Pendukung ---
         const DebugModal = ({ isVisible, onClose, info }) => (
             <Modal isVisible={isVisible} onClose={onClose} title="🐞 Debug Skor">
                 <div dangerouslySetInnerHTML={{ __html: info }} className="text-sm text-gray-700 space-y-1 bg-gray-50 p-3 rounded-lg border border-gray-200" />
@@ -1067,7 +1137,6 @@
             
             const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-            // Audio ref for forced audio focus on mobile
             const audioRef = useRef(null);
             const audioCtxRef = useRef(null);
 
@@ -1107,20 +1176,29 @@
                 }
             }, []);
 
-            // --- Inisialisasi Firebase & Autentikasi Anonim ---
             useEffect(() => {
                 const initFirebase = async () => {
-                    // Beri jeda kecil agar SDK yang diload pada tag module termuat sempurna
                     if (typeof window.FirebaseSDK === 'undefined') {
                         setTimeout(initFirebase, 200);
                         return;
                     }
                     try {
                         const { initializeApp, getAuth, getFirestore, signInWithCustomToken, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
-                        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+                        
+                        let firebaseConfig = null;
+                        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                            try {
+                                firebaseConfig = typeof __firebase_config === 'string' 
+                                    ? JSON.parse(__firebase_config) 
+                                    : __firebase_config;
+                            } catch (e) {
+                                console.error("Gagal parse __firebase_config:", e);
+                            }
+                        }
                         
                         if (!firebaseConfig) {
-                            console.warn("No Firebase configuration found.");
+                            console.warn("Kunci Firebase tidak terdeteksi. Beralih ke Mode Simulasi Cepat.");
+                            setupMockFirebase();
                             return;
                         }
                         
@@ -1128,9 +1206,13 @@
                         const authInstance = getAuth(app);
                         const dbInstance = getFirestore(app);
 
-                        // Auth Flow sesuai Mandat
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(authInstance, __initial_auth_token);
+                            try {
+                                await signInWithCustomToken(authInstance, __initial_auth_token);
+                            } catch (tokenErr) {
+                                console.warn("Custom token gagal, beralih ke Anonim:", tokenErr);
+                                await signInAnonymously(authInstance);
+                            }
                         } else {
                             await signInAnonymously(authInstance);
                         }
@@ -1139,19 +1221,31 @@
                         setAuth(authInstance);
                         
                         onAuthStateChanged(authInstance, (u) => {
-                            setUser(u);
-                            setFirebaseReady(true);
-                            console.log("Firebase Connected & Authenticated.");
+                            if (u) {
+                                setUser(u);
+                                setFirebaseReady(true);
+                                console.log("Firebase Terhubung & Terautentikasi.");
+                            } else {
+                                setFirebaseReady(false);
+                            }
                         });
                     } catch (e) {
-                        console.error("Firebase Initialization Error: ", e);
-                        setFirebaseReady(false);
+                        console.error("Kesalahan inisialisasi cloud: ", e);
+                        setupMockFirebase();
                     }
                 };
+
+                const setupMockFirebase = () => {
+                    const mockDbInstance = { isMock: true };
+                    setDb(mockDbInstance);
+                    setFirebaseReady(true);
+                    setUser({ uid: 'mock-user-id', isAnonymous: true });
+                    console.log("Simulator Room Multi-Tab Aktif.");
+                };
+
                 initFirebase();
             }, []);
 
-            // --- Fungsi Teks ke Suara ---
             const speak = useCallback((text) => {
                 if (isVoiceEnabled && 'speechSynthesis' in window) {
                     if (!audioCtxRef.current) {
@@ -1349,7 +1443,7 @@
                 addWinToHistory(logMsg); 
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
 
-                // Update consecutive counters for Demplon, Dado, Jambul, and Kinoy
+                // Update consecutive counters
                 let newDemplon = consecutiveDemplonWins;
                 let newDado = consecutiveDadoWins;
                 let newJambul = consecutiveJambulWins;
@@ -1781,7 +1875,6 @@
 
             return (
                 <div className="max-w-2xl mx-auto">
-                    {/* Elemen Audio Tersembunyi untuk mengatur Audio Focus di Android */}
                     <audio ref={audioRef} src={SILENT_AUDIO_URI} playsInline preload="auto" loop />
 
                     {/* MODAL RIWAYAT KEMENANGAN */}
@@ -1856,7 +1949,6 @@
                                     🎤
                                 </button>
 
-                                {/* Tombol Gabungan Spotify */}
                                 <div className="flex bg-white rounded-full shadow-lg border border-gray-100 h-12">
                                     <button
                                         onClick={() => { if (spotifyControllerRef.current) { spotifyControllerRef.current.togglePlay(); setIsSpotifyPlaying(prev => !prev); } }}
@@ -1878,7 +1970,6 @@
                             </div>
 
                             <div className="flex justify-end gap-2">
-                                {/* Tombol Hamburger Menu */}
                                 <button onClick={() => setIsMenuOpen(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-2xl font-bold shadow-lg border border-gray-100 hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Buka Menu">
                                     ☰
                                 </button>
@@ -1904,7 +1995,7 @@
                         
                         <ScoreTable data={data} players={players} />
                         
-                        {/* Komponen Pembagi Kartu Remi (Mendukung Offline & Online Room) */}
+                        {/* Komponen Pembagi Kartu Remi yang Diperbaiki */}
                         <CardDealerSection 
                             players={players} 
                             setNotification={setNotification} 
@@ -1920,7 +2011,6 @@
                         />
                         <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
                         
-                        {/* Kolom Tindakan Cepat */}
                         <ActionsSection 
                             onUndo={handleUndo} 
                             onRedo={handleRedo} 

@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Score Keeper</title>
-    <!-- React & Babel Standalone CDNs (Stable Production Releases with Crossorigin) -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -44,8 +43,7 @@
 <body class="bg-[#E9E4F5]">
     <div id="root"></div>
 
-    <!-- Added data-presets and data-type="module" to prevent ES module appendChild errors -->
-    <script type="text/babel" data-presets="env,react" data-type="module">
+    <script type="text/babel">
         // --- KONFIGURASI URL SCRIPT ---
         const PREFILLED_SHEET_URL = "https://script.google.com/macros/s/AKfycbxE8yRWM5hCfvbQfKSdEf7rpKo-yd8vHZrV_U_BFLV44emVWTyu3joi78bbnODjusM/exec"; 
 
@@ -65,48 +63,11 @@
         const BACKUP_KEY = '@scoreKeeperBackup_web';
         const REDO_KEY = '@scoreKeeperRedo_web';
         const HISTORY_KEY = '@scoreKeeperHistory_web';
+        const WIN_HISTORY_KEY = '@scoreKeeperWinHistory_web'; // Key khusus untuk riwayat 10 kemenangan
         const PLAYER_KEY = '@scoreKeeperPlayers_web';
         const SHEETS_KEY = '@scoreKeeperSheets_web'; 
 
-        // Fungsi pembungkus localStorage yang aman terhadap SecurityError di sandboxed iframe
-        const checkLocalStorage = () => {
-            try {
-                return !!window.localStorage;
-            } catch (e) {
-                return false;
-            }
-        };
-
-        const safeLocalStorage = {
-            _data: {},
-            getItem(key) {
-                if (checkLocalStorage()) {
-                    try {
-                        return window.localStorage.getItem(key);
-                    } catch (e) {}
-                }
-                return this._data[key] || null;
-            },
-            setItem(key, value) {
-                if (checkLocalStorage()) {
-                    try {
-                        window.localStorage.setItem(key, value);
-                        return;
-                    } catch (e) {}
-                }
-                this._data[key] = String(value);
-            },
-            removeItem(key) {
-                if (checkLocalStorage()) {
-                    try {
-                        window.localStorage.removeItem(key);
-                        return;
-                    } catch (e) {}
-                }
-                delete this._data[key];
-            }
-        };
-
+        // --- Initial Data Structure ---
         const getInitialData = (players = DEFAULT_PLAYERS) => {
             const data = {};
             players.forEach(player => {
@@ -115,6 +76,7 @@
             return data;
         };
 
+        // --- Shared Components ---
         const CustomSwitch = ({ value, onValueChange, disabled }) => (
             <button
                 type="button"
@@ -185,33 +147,16 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
                     <div className="bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-bold mb-4 text-center text-[#4B0082]">☁️ Simpan ke Google Sheet</h2>
-                        
-                        <div className="mb-4 text-left">
-                            <label className="block text-sm font-semibold text-gray-700 mb-1">🔗 Google Sheets Script URL</label>
-                            <input
-                                type="text"
-                                value={url}
-                                onChange={e => {
-                                    const newUrl = e.target.value;
-                                    setUrl(newUrl);
-                                    onSaveUrl(newUrl);
-                                }}
-                                placeholder="https://script.google.com/macros/s/..."
-                                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-[#5D3FD3] transition-colors"
-                            />
-                        </div>
-
                         <div className="mb-6 text-center">
                             <p className="text-sm font-semibold text-gray-700">Status Koneksi:</p>
                             <p className={`text-sm ${url ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
-                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi"}
+                                {url ? "✅ Terhubung ke Server" : "⚠️ URL Belum Dikonfigurasi di Kode"}
                             </p>
                         </div>
-
-                        <button onClick={handleSync} disabled={isSyncing || !url} className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-2 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
+                        <button onClick={handleSync} disabled={isSyncing || !url} className={`w-full text-white font-bold py-3 px-4 rounded-lg mb-4 transition-colors shadow-md ${isSyncing || !url ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
                             {isSyncing ? '⏳ Mengirim Data...' : '📤 Kirim Skor ke Sheet'}
                         </button>
-                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-2 hover:bg-gray-400">Tutup</button>
+                        <button onClick={onClose} className="w-full bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mt-4 hover:bg-gray-400">Tutup</button>
                     </div>
                 </div>
             );
@@ -246,7 +191,7 @@
             );
         };
 
-        const SpotifyPlayer = ({ embedUrl, spotifyUri, onControllerReady, isPlaying, setIsPlaying, isVisible, onClose }) => {
+        const SpotifyPlayer = ({ embedUrl, spotifyUri, onControllerReady, isPlaying, setIsPlaying, isVisible, onClose, setNotification }) => {
             const iframeRef = useRef(null);
             const controllerRef = useRef(null);
             const [loaded, setLoaded] = useState(false);
@@ -260,7 +205,9 @@
             // Fungsi untuk mendapatkan Token dari Client Credentials Flow
             const fetchAccessToken = async () => {
                 if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || SPOTIFY_CLIENT_ID.includes("MASUKKAN")) {
-                    console.warn("Client ID atau Secret Spotify belum diatur di kode!");
+                    if (setNotification) {
+                        setNotification({ message: "Client ID atau Secret Spotify belum diatur di kode!", type: "error" });
+                    }
                     return null;
                 }
                 try {
@@ -607,7 +554,7 @@
             useEffect(() => {
                 if (data && isVisible) {
                     const obj = {};
-                    players.forEach(p => { obj[p] = data[p]?.skor ?? 0; });
+                    players.forEach(p => { obj[p] = data[p].skor; });
                     setEditScores(obj);
                 }
             }, [data, isVisible, players]);
@@ -696,7 +643,7 @@
             useEffect(() => {
                 if (data && isVisible) {
                     const obj = {};
-                    players.forEach(p => { obj[p] = { n: data[p]?.patokan_normal ?? 0, j: data[p]?.patokan_joker ?? 0 }; });
+                    players.forEach(p => { obj[p] = { n: data[p].patokan_normal, j: data[p].patokan_joker }; });
                     setStakes(obj);
                 }
             }, [data, isVisible, players]);
@@ -755,7 +702,7 @@
 
         const getStack = (key) => {
             try {
-                const item = safeLocalStorage.getItem(key);
+                const item = localStorage.getItem(key);
                 if (!item) return [];
                 const parsed = JSON.parse(item);
                 return Array.isArray(parsed) ? parsed : [];
@@ -769,7 +716,9 @@
             const [data, setData] = useState(null);
             const [notification, setNotificationRaw] = useState({ message: 'Welcome! Gunakan fitur Voice untuk mencatat skor otomatis.', type: 'info' });
             
-            const [helpModalVisible, setHelpModalVisible] = useState(false);
+            const [historyModalVisible, setHistoryModalVisible] = useState(false);
+            const [winHistory, setWinHistory] = useState([]); // State untuk menampung riwayat 10 kemenangan terakhir
+            
             const [editModalVisible, setEditModalVisible] = useState(false);
             const [editPlayersModalVisible, setEditPlayersModalVisible] = useState(false);
             const [editStakesModalVisible, setEditStakesModalVisible] = useState(false);
@@ -906,16 +855,23 @@
 
             useEffect(() => {
                 try {
-                    const jsonPlayers = safeLocalStorage.getItem(PLAYER_KEY);
+                    const jsonPlayers = localStorage.getItem(PLAYER_KEY);
                     const loadedPlayers = jsonPlayers ? JSON.parse(jsonPlayers) : DEFAULT_PLAYERS;
                     setPlayers(loadedPlayers);
-                    const jsonData = safeLocalStorage.getItem(DATA_KEY);
+                    
+                    const jsonData = localStorage.getItem(DATA_KEY);
                     setData(jsonData ? JSON.parse(jsonData) : getInitialData(loadedPlayers));
-                    const savedSheetUrl = safeLocalStorage.getItem(SHEETS_KEY);
+                    
+                    const savedSheetUrl = localStorage.getItem(SHEETS_KEY);
                     setSheetUrl(savedSheetUrl || PREFILLED_SHEET_URL || '');
+
+                    // Mengambil riwayat kemenangan dari localStorage
+                    const savedWinHistory = localStorage.getItem(WIN_HISTORY_KEY);
+                    setWinHistory(savedWinHistory ? JSON.parse(savedWinHistory) : []);
                 } catch (e) {
                     setPlayers(DEFAULT_PLAYERS);
                     setData(getInitialData(DEFAULT_PLAYERS));
+                    setWinHistory([]);
                 }
             }, []);
 
@@ -925,22 +881,22 @@
                         let undoStack = getStack(BACKUP_KEY);
                         undoStack.push(data);
                         if (undoStack.length > 5) undoStack.shift();
-                        safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                        safeLocalStorage.removeItem(REDO_KEY);
+                        localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                        localStorage.removeItem(REDO_KEY);
                     }
-                    safeLocalStorage.setItem(DATA_KEY, JSON.stringify(newData));
+                    localStorage.setItem(DATA_KEY, JSON.stringify(newData));
                     setData(newData);
                 } catch (e) {
                     setNotification({ message: 'Error saving data!', type: 'error' });
                 }
             }, [data, setNotification]);
 
-            const handleSaveSheetUrl = (url) => { setSheetUrl(url); safeLocalStorage.setItem(SHEETS_KEY, url); };
+            const handleSaveSheetUrl = (url) => { setSheetUrl(url); localStorage.setItem(SHEETS_KEY, url); };
             
             const handleSyncToSheets = async (targetUrl) => {
                 if (!data) return;
                 const scoresMap = {};
-                players.forEach(p => scoresMap[p] = data[p]?.skor ?? 0);
+                players.forEach(p => scoresMap[p] = data[p].skor);
                 const payload = { players: players, scores: scoresMap };
                 try {
                     await fetch(targetUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -954,9 +910,20 @@
             const logHistory = useCallback((text) => {
                 const time = new Date().toLocaleString('id-ID', { hour12: false });
                 const newEntry = `[${time}] ${text}`;
-                const currentHistory = JSON.parse(safeLocalStorage.getItem(HISTORY_KEY) || '[]');
+                const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
                 const updatedHistory = [newEntry, ...currentHistory].slice(50);
-                safeLocalStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+            }, []);
+
+            // Helper khusus untuk merekam dan memperbarui riwayat kemenangan (maksimal 10)
+            const addWinToHistory = useCallback((winDetails) => {
+                const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const newEntry = { time, detail: winDetails };
+                setWinHistory(prev => {
+                    const updated = [newEntry, ...prev].slice(0, 10);
+                    localStorage.setItem(WIN_HISTORY_KEY, JSON.stringify(updated));
+                    return updated;
+                });
             }, []);
 
             const handleUpdateScore = (winner, isJoker, isWin2, jokerHolders = [], buyers = []) => {
@@ -965,7 +932,7 @@
                 const key = isJoker ? 'patokan_joker' : 'patokan_normal';
                 
                 for (const p of players) {
-                    if (!newData[p] || newData[p][key] <= 0) {
+                    if (newData[p][key] <= 0) {
                         setNotification({message: `⚠️ Gagal! ${p} belum set nilai ${isJoker ? 'Joker' : 'Normal'}.`, type: 'error'});
                         return;
                     }
@@ -975,25 +942,21 @@
                 let totalLoss = 0;
 
                 losers.forEach(loser => {
-                    const normalStake = newData[loser]?.patokan_normal ?? 0;
-                    const jokerStake = newData[loser]?.patokan_joker ?? 0;
-                    let baseLoss = newData[loser]?.[key] ?? 0;
+                    const normalStake = newData[loser].patokan_normal;
+                    const jokerStake = newData[loser].patokan_joker;
+                    let baseLoss = newData[loser][key];
                     let jokerPenaltyCalc = jokerHolders.includes(loser) ? (jokerStake - normalStake) : 0;
                     const buyerInfo = buyers.find(b => b.name === loser);
                     let buyPenaltyCalc = buyerInfo ? buyerInfo.amount * normalStake : 0;
                     let loss = baseLoss + jokerPenaltyCalc + buyPenaltyCalc;
                     if (isWin2) loss *= 2;
-                    if (newData[loser]) {
-                        newData[loser].skor -= loss;
-                    }
+                    newData[loser].skor -= loss;
                     totalLoss += loss;
                 });
 
-                if (newData[winner]) {
-                    newData[winner].skor += totalLoss;
-                }
+                newData[winner].skor += totalLoss;
 
-                const totalCheck = players.reduce((sum, p) => sum + (newData[p]?.skor ?? 0), 0);
+                const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' });
                     return;
@@ -1003,7 +966,9 @@
                 let logMsg = `${winner} menang ronde ${isJoker ? 'joker' : 'biasa'}${isWin2 ? ' (x2)' : ''} (+${totalLoss.toFixed(2)})`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
                 if (buyers.length > 0) logMsg += `, beli: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                
                 logHistory(logMsg);
+                addWinToHistory(logMsg); // Merekam riwayat kemenangan spesifik
                 setNotification({ message: `🎉 ${logMsg}`, type: 'success' });
 
                 // Update consecutive counters for Demplon, Dado, Jambul, and Kinoy
@@ -1065,7 +1030,6 @@
                     else if (newDemplon === 1) prefix = 'demplon menang nih';
                 }
 
-                // Hanya beri notifikasi suara singkat (prefix + poin yang didapat) jika voice alerts aktif.
                 const shortSpeech = `${winner} mendapatkan ${Math.round(totalLoss)} poin.`;
                 if (prefix) {
                     if (voiceAlertsEnabled) {
@@ -1080,7 +1044,7 @@
                 if (!data) return;
                 let newData = JSON.parse(JSON.stringify(data));
                 for (const p of players) {
-                    if (!newData[p] || newData[p].patokan_normal <= 0) {
+                    if (newData[p].patokan_normal <= 0) {
                         setNotification({ message: `⚠️ Gagal! ${p} belum set nilai Normal.`, type: 'error' });
                         return;
                     }
@@ -1091,25 +1055,20 @@
                 if (winnerBuyers.length > 1) {
                     setNotification({ message: `❌ Hanya satu pemenang yang boleh buy.`, type: 'error' }); return;
                 }
-                const totalNormalStake = players.reduce((sum, p) => sum + (newData[p]?.patokan_normal ?? 0), 0);
+                const totalNormalStake = players.reduce((sum, p) => sum + newData[p].patokan_normal, 0);
                 const baseChange = totalNormalStake / players.length;
                 let totalJokerPenalty = 0;
-                jokerHolders.forEach(jh => { 
-                    totalJokerPenalty += (newData[jh]?.patokan_joker ?? 0) - (newData[jh]?.patokan_normal ?? 0); 
-                });
+                jokerHolders.forEach(jh => { totalJokerPenalty += newData[jh].patokan_joker - newData[jh].patokan_normal; });
                 let totalLoserBuyPenalty = 0;
-                loserBuyers.forEach(b => { 
-                    totalLoserBuyPenalty += b.amount * (newData[b.name]?.patokan_normal ?? 0); 
-                });
+                loserBuyers.forEach(b => { totalLoserBuyPenalty += b.amount * newData[b.name].patokan_normal; });
                 
                 losers.forEach(loser => {
                     let currentLoss = baseChange;
-                    const jokerPenaltyCalc = jokerHolders.includes(loser) ? ((newData[loser]?.patokan_joker ?? 0) - (newData[loser]?.patokan_normal ?? 0)) : 0;
+                    const jokerPenaltyCalc = jokerHolders.includes(loser) ? (newData[loser].patokan_joker - newData[loser].patokan_normal) : 0;
                     const buyerInfo = loserBuyers.find(b => b.name === loser);
-                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * (newData[loser]?.patokan_normal ?? 0) : 0;
-                    if (newData[loser]) {
-                        newData[loser].skor -= currentLoss + jokerPenaltyCalc + finalBuyPenalty;
-                    }
+                    const finalBuyPenalty = buyerInfo ? buyerInfo.amount * newData[loser].patokan_normal : 0;
+                    currentLoss += jokerPenaltyCalc + finalBuyPenalty;
+                    newData[loser].skor -= currentLoss;
                 });
                 
                 const totalGainFromLosers = totalJokerPenalty + totalLoserBuyPenalty;
@@ -1118,35 +1077,34 @@
                 if (winnerBuyers.length === 1 && winners.length === 2) {
                     const winnerBuyer = winnerBuyers[0];
                     const otherWinner = winners.find(w => w !== winnerBuyer.name);
-                    const transferAmount = ((newData[winnerBuyer.name]?.patokan_normal ?? 0) * winnerBuyer.amount) / winners.length;
-                    if (newData[winnerBuyer.name]) newData[winnerBuyer.name].skor += baseGainPerWinner - transferAmount;
-                    if (newData[otherWinner]) newData[otherWinner].skor += baseGainPerWinner + transferAmount;
+                    const transferAmount = (newData[winnerBuyer.name].patokan_normal * winnerBuyer.amount) / winners.length;
+                    newData[winnerBuyer.name].skor += baseGainPerWinner - transferAmount;
+                    newData[otherWinner].skor += baseGainPerWinner + transferAmount;
                 } else {
-                    winners.forEach(winner => { 
-                        if (newData[winner]) newData[winner].skor += baseGainPerWinner; 
-                    });
+                    winners.forEach(winner => { newData[winner].skor += baseGainPerWinner; });
                 }
                 
-                const totalCheck = players.reduce((sum, p) => sum + (newData[p]?.skor ?? 0), 0);
+                const totalCheck = players.reduce((sum, p) => sum + newData[p].skor, 0);
                 if (Math.abs(totalCheck) > 0.01) {
                     setNotification({ message: `❌ Perubahan dibatalkan! Total skor tidak seimbang.`, type: 'error' }); return;
                 }
 
                 saveData(newData);
-                let logMsg = `Tim ${winners.join(' & ')} menang`;
+                let logMsg = `Tim ${winners.join(' & ')} menang (+${baseGainPerWinner.toFixed(0)} poin per pemain)`;
                 if (jokerHolders.length > 0) logMsg += `, penalti joker: ${jokerHolders.join(', ')}`;
                 if (buyers.length > 0) logMsg += `, beli: ${buyers.map(b => `${b.name} ${b.amount}x`).join(', ')}`;
+                
                 logHistory(logMsg);
+                addWinToHistory(logMsg); // Merekam kemenangan tim ke riwayat
                 setNotification({ message: `🤝 ${logMsg}`, type: 'success' });
 
                 const shortTeamSpeech = `${winners.join(' dan ')} mendapatkan ${Math.round(baseGainPerWinner)} poin.`;
                 if (voiceAlertsEnabled) speak(shortTeamSpeech);
             };
 
-            // Tombol / fungsi untuk membacakan skor saat diminta (skor sementara)
             const speakCurrentScores = () => {
                 if (!data) { setNotification({ message: 'Data belum tersedia untuk dibacakan.', type: 'error' }); return; }
-                const scoreText = players.map(p => `${p} ${Math.round(data[p]?.skor ?? 0)}`).join(', ');
+                const scoreText = players.map(p => `${p} ${Math.round(data[p].skor)}`).join(', ');
                 speak(`Skor saat ini: ${scoreText}`);
             };
 
@@ -1156,7 +1114,7 @@
                     setNotification({message: "Pilih 2 pemain yang berbeda.", type: 'error'}); return false;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
-                if (!newData[loser] || !newData[gainer] || newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
+                if (newData[loser].patokan_joker <= 0 || newData[loser].patokan_normal <= 0) {
                     setNotification({ message: `⚠️ Gagal! ${loser} belum set patokan.`, type: 'error'}); return false;
                 }
                 const transferAmount = newData[loser].patokan_joker - newData[loser].patokan_normal;
@@ -1314,9 +1272,7 @@
                     onConfirm: () => {
                         if (!data) return;
                         const newData = JSON.parse(JSON.stringify(data));
-                        players.forEach(p => {
-                            if (newData[p]) newData[p].skor = 0;
-                        });
+                        players.forEach(p => (newData[p].skor = 0));
                         saveData(newData);
                         logHistory("Semua skor direset ke 0.");
                         setNotification({ message: "🔄 Semua skor berhasil direset ke 0.", type: 'success' });
@@ -1332,12 +1288,7 @@
                     onConfirm: () => {
                         if (!data) return;
                         const newData = JSON.parse(JSON.stringify(data));
-                        players.forEach(p => { 
-                            if (newData[p]) {
-                                newData[p].patokan_normal = 0; 
-                                newData[p].patokan_joker = 0; 
-                            }
-                        });
+                        players.forEach(p => { newData[p].patokan_normal = 0; newData[p].patokan_joker = 0; });
                         saveData(newData);
                         logHistory("Semua patokan poin direset ke 0.");
                         setNotification({ message: "🧮 Semua patokan poin berhasil direset.", type: 'success' });
@@ -1351,9 +1302,9 @@
                 const previousData = undoStack.pop();
                 let redoStack = getStack(REDO_KEY);
                 if (data) redoStack.push(data);
-                safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                safeLocalStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-                safeLocalStorage.setItem(DATA_KEY, JSON.stringify(previousData));
+                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                localStorage.setItem(DATA_KEY, JSON.stringify(previousData));
                 setData(previousData);
                 logHistory("Perubahan terakhir dibatalkan (undo).");
                 setNotification({ message: "↩️ Undo berhasil!", type: 'success' });
@@ -1365,9 +1316,9 @@
                 const nextData = redoStack.pop();
                 let undoStack = getStack(BACKUP_KEY);
                 if (data) undoStack.push(data);
-                safeLocalStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-                safeLocalStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
-                safeLocalStorage.setItem(DATA_KEY, JSON.stringify(nextData));
+                localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+                localStorage.setItem(BACKUP_KEY, JSON.stringify(undoStack));
+                localStorage.setItem(DATA_KEY, JSON.stringify(nextData));
                 setData(nextData);
                 logHistory("Perubahan terakhir diulang (redo).");
                 setNotification({ message: "➡️ Redo berhasil!", type: 'success' });
@@ -1378,7 +1329,7 @@
                 try {
                     const undoStack = getStack(BACKUP_KEY);
                     const prevData = undoStack.length > 0 ? undoStack[undoStack.length - 1] : {};
-                    const currData = JSON.parse(safeLocalStorage.getItem(DATA_KEY) || "{}");
+                    const currData = JSON.parse(localStorage.getItem(DATA_KEY) || "{}");
                     detail += `<div class='font-bold mb-2'>Detail perubahan skor round terakhir:</div>`;
                     players.forEach(p => {
                         const prev = prevData[p]?.skor ?? 0;
@@ -1412,9 +1363,7 @@
                     return;
                 }
                 const newData = JSON.parse(JSON.stringify(data));
-                players.forEach(p => { 
-                    if (newData[p]) newData[p].skor = parseFloat(editScores[p]); 
-                });
+                players.forEach(p => { newData[p].skor = parseFloat(editScores[p]); });
                 saveData(newData);
                 setNotification({message: "✏️ Skor berhasil diedit.", type: "success"});
                 setEditModalVisible(false);
@@ -1423,7 +1372,7 @@
             const handleSavePlayers = (editPlayers) => {
                 let validPlayers = editPlayers.map(p => p.trim()).filter(p => p.length > 0);
                 if (validPlayers.length < 2) { setNotification({message:"Minimal 2 pemain!", type:"error"}); return; }
-                safeLocalStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
+                localStorage.setItem(PLAYER_KEY, JSON.stringify(validPlayers));
                 setPlayers(validPlayers);
                 let newData = getInitialData(validPlayers);
                 validPlayers.forEach(p => { if (data && data[p]) newData[p] = {...data[p]}; });
@@ -1434,13 +1383,17 @@
             const handleSaveStakes = (stakes) => {
                 const newData = JSON.parse(JSON.stringify(data));
                 players.forEach(p => {
-                    if (newData[p]) {
-                        newData[p].patokan_normal = Math.round(parseFloat(stakes[p]?.n) || 0);
-                        newData[p].patokan_joker = Math.round(parseFloat(stakes[p]?.j) || 0);
-                    }
+                    newData[p].patokan_normal = Math.round(parseFloat(stakes[p].n) || 0);
+                    newData[p].patokan_joker = Math.round(parseFloat(stakes[p].j) || 0);
                 });
                 saveData(newData);
                 setNotification({message: '✅ Nilai patokan berhasil diupdate!', type: 'success'});
+            };
+
+            const clearWinHistory = () => {
+                setWinHistory([]);
+                localStorage.removeItem(WIN_HISTORY_KEY);
+                setNotification({ message: "🗑️ Riwayat kemenangan berhasil dibersihkan.", type: 'success' });
             };
 
             const notificationColors = {
@@ -1454,26 +1407,32 @@
                     {/* Elemen Audio Tersembunyi untuk mengatur Audio Focus di Android */}
                     <audio ref={audioRef} src={SILENT_AUDIO_URI} playsInline preload="auto" loop />
 
-                    <Modal isVisible={helpModalVisible} onClose={() => setHelpModalVisible(false)} title="📘 Panduan & Voice Command">
-                         <div className="text-left text-sm leading-relaxed text-gray-700 space-y-4">
-                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                <h3 className="font-bold text-base text-[#4B0082] mb-1">🎤 Format Suara (Voice to Text)</h3>
-                                <ul className="list-disc pl-4 space-y-1">
-                                    <li><b>Menang Normal:</b> "[Nama] win" (cth: <i>"Budi win"</i>)</li>
-                                    <li><b>Menang Tim:</b> "[Nama1] win [Nama2] win" (cth: <i>"Budi win Dede win"</i>)</li>
-                                    <li><b>Menang x2:</b> "[Nama] win langsung"</li>
-                                    <li><b>Menang dgn Joker Sendiri:</b> "[Nama] win joker"</li>
-                                    <li><b>Penalti Joker (Musuh):</b> "[Pemenang] win [Kalah] joker" (cth: <i>"Budi win Dede joker"</i>)</li>
-                                    <li><b>Catat Beli:</b> "[Pemenang] win [Kalah] beli sekali" (cth: <i>"Budi win Dede beli sekali"</i>)</li>
-                                    <li><b>Transfer Joker:</b> "[Pemberi] masukin joker [Penerima]" (cth: <i>"Budi masukin joker Dede"</i>)</li>
-                                </ul>
-                                <p className="mt-2 text-xs text-gray-500">*Gunakan nama pemain yang jelas agar mudah dideteksi oleh Google Voice.</p>
+                    {/* MODAL RIWAYAT KEMENANGAN (Menggantikan Modal Bantuan) */}
+                    <Modal isVisible={historyModalVisible} onClose={() => setHistoryModalVisible(false)} title="📜 10 Kemenangan Terakhir">
+                        {winHistory.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <p className="text-lg">📭</p>
+                                <p className="text-sm mt-1">Belum ada riwayat kemenangan yang tercatat.</p>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-base text-[#4B0082]">Set Patokan Poin</h3>
-                                <p>Isi nilai Normal (N) dan Joker (J) untuk tiap pemain di menu Setting ⚙️ di bawah.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {winHistory.map((item, index) => (
+                                    <div key={index} className="flex gap-3 p-3 bg-[#F6F4FC] rounded-xl border border-purple-100 items-start">
+                                        <div className="bg-yellow-100 p-2 rounded-lg flex-shrink-0 text-lg">🏆</div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-gray-800 break-words">{item.detail}</p>
+                                            <p className="text-xs text-purple-600 font-medium mt-1">🕐 {item.time}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button 
+                                    onClick={clearWinHistory} 
+                                    className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 px-4 rounded-xl mt-4 transition-colors text-sm"
+                                >
+                                    🗑️ Bersihkan Riwayat
+                                </button>
                             </div>
-                         </div>
+                        )}
                     </Modal>
 
                     <DebugModal isVisible={debugModalVisible} onClose={() => setDebugModalVisible(false)} info={debugInfo} />
@@ -1491,6 +1450,7 @@
                         setIsPlaying={setIsSpotifyPlaying}
                         isVisible={showSpotify}
                         onClose={() => setShowSpotify(false)}
+                        setNotification={setNotification}
                     />
 
                     <div className="p-4 pb-12">
@@ -1532,7 +1492,10 @@
                                 <button onClick={() => setVoiceAlertsEnabled(!voiceAlertsEnabled)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#F59E0B] hover:text-white transition-colors" title="Toggle Voice Alerts">
                                     {voiceAlertsEnabled ? '🔔' : '🔕'}
                                 </button>
-                                <button onClick={() => setHelpModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Bantuan">📘</button>
+                                {/* TOMBOL HISTORY (MENGGANTIKAN TOMBOL BANTUAN) */}
+                                <button onClick={() => setHistoryModalVisible(true)} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Riwayat Kemenangan">
+                                    📜
+                                </button>
                                 <button onClick={handleShowDebug} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-lg font-bold shadow hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Debug">🐞</button>
                             </div>
                         </div>

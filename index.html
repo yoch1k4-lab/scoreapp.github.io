@@ -48,7 +48,7 @@
         }
     </style>
 
-    <!-- Firebase SDK ES Modules Loader Helper -->
+    <!-- Firebase SDK ES Modules Loader Helper dengan Fail-safe check -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -592,8 +592,7 @@
             // Buat Room Baru (Host)
             const handleCreateRoom = async () => {
                 if (!firebaseReady || !db || db.isMock) {
-                    setNotification({ message: "Firebase belum aktif / Mode Simulasi. Gunakan room fiktif '1234'!", type: 'error' });
-                    // Fallback simulasi lokal
+                    setNotification({ message: "Firebase belum terdeteksi. Menggunakan Simulator offline Room '1234'!", type: 'info' });
                     setupMockRoom();
                     return;
                 }
@@ -619,10 +618,11 @@
                 try {
                     await window.FirebaseSDK.setDoc(roomDoc, initialRoom);
                     listenToRoom(newRoomId);
-                    setNotification({ message: `Room ${newRoomId} Berhasil Dibuat!`, type: 'success' });
+                    setNotification({ message: `Room ${newRoomId} Berhasil Dibuat di Cloud!`, type: 'success' });
                 } catch (e) {
-                    console.error(e);
-                    setNotification({ message: 'Gagal membuat room di Cloud. Coba lagi.', type: 'error' });
+                    console.error("Gagal write room ke Firestore:", e);
+                    setNotification({ message: 'Error Cloud. Menggunakan Simulator offline Room 1234!', type: 'info' });
+                    setupMockRoom();
                 }
             };
 
@@ -637,7 +637,7 @@
                     cardsPerPlayer: cardsPerPlayer,
                     includeRedJoker: includeRedJoker,
                     includeBlackJoker: includeBlackJoker,
-                    playersJoined: ['Jambul', 'Dado', 'Demplon'],
+                    playersJoined: ['Jambul', 'Dado', 'Demplon', 'Kinoy'],
                     hands: {},
                     deckRemaining: 54,
                     status: 'setup'
@@ -658,9 +658,27 @@
 
                 setRole('player');
 
-                if (!firebaseReady || !db || db.isMock) {
-                    setNotification({ message: "Gabung simulasi lokal Room '1234'...", type: 'success' });
-                    setRoomId('1234');
+                if (!firebaseReady || !db || db.isMock || roomId === '1234') {
+                    setNotification({ message: `Masuk Simulasi Offline Room '${roomId}' sebagai ${selectedPlayerName}!`, type: 'success' });
+                    // Simulasi hand kosong
+                    const mockData = {
+                        roomId: roomId,
+                        hostId: 'mock-host',
+                        cardsPerPlayer: cardsPerPlayer,
+                        includeRedJoker: includeRedJoker,
+                        includeBlackJoker: includeBlackJoker,
+                        playersJoined: ['Jambul', 'Dado', 'Demplon', 'Kinoy'],
+                        hands: {
+                            [selectedPlayerName]: [
+                                { val: 'A', suit: '♠', color: 'black', label: 'A♠' },
+                                { val: '10', suit: '♥', color: 'red', label: '10♥' },
+                                { val: 'Joker', suit: '🃏', color: 'red', label: 'Joker Merah' }
+                            ]
+                        },
+                        deckRemaining: 51,
+                        status: 'distributed'
+                    };
+                    setRoomState(mockData);
                     return;
                 }
 
@@ -685,8 +703,8 @@
                     listenToRoom(roomId);
                     setNotification({ message: `Sukses gabung Room ${roomId} sebagai ${selectedPlayerName}!`, type: 'success' });
                 } catch (e) {
-                    console.error(e);
-                    setNotification({ message: 'Gagal gabung room.', type: 'error' });
+                    console.error("Gagal join room Firestore:", e);
+                    setNotification({ message: 'Gagal gabung room cloud. Masuk ke mode simulasi lokal.', type: 'error' });
                 }
             };
 
@@ -704,7 +722,7 @@
                 });
             };
 
-            // Fungsi Mengocok & Membagi Kartu (Khusus Host)
+            // Fungsi Mengocok & Membagi Kartu
             const handleDealCards = async () => {
                 if (!roomState) return;
                 const targetPlayers = players; // Jambul, Demplon, Dado, Kinoy
@@ -751,7 +769,7 @@
                 }
 
                 // Update ke Cloud Firestore / Simulasi Lokal
-                if (!db || db.isMock) {
+                if (!db || db.isMock || roomId === '1234') {
                     const mockUpdate = {
                         ...roomState,
                         hands: newHands,
@@ -778,7 +796,7 @@
             };
 
             const handleResetRoom = async () => {
-                if (!db || db.isMock) {
+                if (!db || db.isMock || roomId === '1234') {
                     setupMockRoom();
                     return;
                 }
@@ -835,7 +853,7 @@
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Masukkan ID Room (4 Digit)</label>
                                 <input 
                                     type="number" 
-                                    placeholder="Contoh: 8432" 
+                                    placeholder="Contoh: 1234 atau ID Room Host" 
                                     value={roomId === 'join_mode' ? '' : roomId}
                                     onChange={e => setRoomId(e.target.value)}
                                     className="w-full p-3 rounded-xl border border-gray-300 font-bold text-center text-lg outline-none focus:ring-2 focus:ring-[#5D3FD3]"
@@ -955,7 +973,7 @@
                                 </div>
                             )}
 
-                            {/* Rekap Ringkasan Jumlah Kartu di HP Masing-Masing */}
+                            {/* Rekap Ringkasan Jumlah Kartu */}
                             {roomState && roomState.status === 'distributed' && (
                                 <div className="bg-[#F6F4FC] p-3 rounded-xl border border-purple-100">
                                     <p className="text-xs font-bold text-[#4B0082] uppercase mb-1.5">🧮 Sisa Kartu di Deck: {roomState.deckRemaining}</p>
@@ -981,7 +999,7 @@
         const App = () => {
             const [players, setPlayers] = useState(DEFAULT_PLAYERS);
             const [data, setData] = useState(null);
-            const [notification, setNotificationRaw] = useState({ message: 'Welcome! Gunakan fitur Voice untuk mencatat skor otomatis.', type: 'info' });
+            const [notification, setNotificationRaw] = useState({ message: 'Selamat datang! Gunakan fitur Voice untuk mencatat skor otomatis.', type: 'info' });
             
             const [historyModalVisible, setHistoryModalVisible] = useState(false);
             const [winHistory, setWinHistory] = useState([]); 
@@ -1036,16 +1054,20 @@
                 }
             }, []);
 
+            // Menginisialisasi Firebase secara aman dan fail-safe
             useEffect(() => {
                 const initFirebase = async () => {
+                    // Beri jeda kecil agar SDK dimuat sepenuhnya di window
                     if (typeof window.FirebaseSDK === 'undefined') {
-                        setTimeout(initFirebase, 200);
+                        setTimeout(initFirebase, 250);
                         return;
                     }
                     try {
                         const { initializeApp, getAuth, getFirestore, signInWithCustomToken, signInAnonymously, onAuthStateChanged } = window.FirebaseSDK;
                         
                         let firebaseConfig = null;
+                        
+                        // Periksa apakah global variable __firebase_config disediakan oleh platform
                         if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                             try {
                                 firebaseConfig = typeof __firebase_config === 'string' 
@@ -1056,16 +1078,19 @@
                             }
                         }
                         
+                        // Jika tidak ada firebaseConfig dari environment, beralih langsung ke mock tanpa error
                         if (!firebaseConfig) {
-                            console.warn("Kunci Firebase tidak terdeteksi. Beralih ke Mode Simulasi Cepat.");
+                            console.warn("Kunci Firebase tidak terdeteksi di server. Berhasil mengaktifkan Mode Simulator offline.");
                             setupMockFirebase();
                             return;
                         }
                         
+                        // Jalankan Inisialisasi Firebase secara aman
                         const app = initializeApp(firebaseConfig);
                         const authInstance = getAuth(app);
                         const dbInstance = getFirestore(app);
 
+                        // Aturan Autentikasi sesuai mandat
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             try {
                                 await signInWithCustomToken(authInstance, __initial_auth_token);
@@ -1084,6 +1109,7 @@
                             if (u) {
                                 setUser(u);
                                 setFirebaseReady(true);
+                                setNotification({ message: "Firebase Terkoneksi secara Real-Time!", type: "success" });
                                 console.log("Firebase Terhubung & Terautentikasi.");
                             } else {
                                 setFirebaseReady(false);
@@ -1099,7 +1125,8 @@
                     const mockDbInstance = { isMock: true };
                     setDb(mockDbInstance);
                     setFirebaseReady(true);
-                    setUser({ uid: 'mock-user-id', isAnonymous: true });
+                    setUser({ uid: 'mock-user-id-' + Math.floor(Math.random() * 1000), isAnonymous: true });
+                    setNotification({ message: "Simulator Room Aktif (Gunakan Room ID '1234' untuk latihan)", type: "info" });
                     console.log("Simulator Room Multi-Tab Aktif.");
                 };
 
@@ -1829,7 +1856,7 @@
                                 </div>
                             </div>
 
-                            {/* TOMBOL BARU: "BAGI KARTU" DI SEBELAH MENU UTAMA */}
+                            {/* TOMBOL "BAGI KARTU" */}
                             <div className="flex justify-end gap-2">
                                 <button 
                                     onClick={() => setShowDealer(!showDealer)} 

@@ -567,8 +567,8 @@
             );
         };
 
-        // --- KOMPONEN BARU: GAME DEAlER & BAGI KARTU MULTIPLAYER ---
-        const CardDealerSection = ({ players, setNotification, db, userId, firebaseReady }) => {
+        // --- GAME DEALER & BAGI KARTU MULTIPLAYER ---
+        const CardDealerSection = ({ players, setNotification, db, userId, firebaseReady, onGoToScores }) => {
             const [roomId, setRoomId] = useState('');
             const [role, setRole] = useState(''); // 'host' atau 'player'
             const [selectedPlayerName, setSelectedPlayerName] = useState('');
@@ -815,28 +815,42 @@
             const myCards = (roomState && roomState.hands && selectedPlayerName) ? roomState.hands[selectedPlayerName] : [];
 
             return (
-                <div className="bg-white rounded-2xl p-5 mb-5 shadow-lg border-2 border-[#5D3FD3]">
+                <div className="bg-white rounded-2xl p-5 mb-5 shadow-xl border-2 border-[#5D3FD3] animate-fadeIn">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-xl font-bold text-[#5D3FD3] flex items-center gap-2">🃏 Pembagi Kartu Remi</h2>
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">🃏</span>
+                            <h2 className="text-xl font-bold text-[#5D3FD3]">Bagi Kartu Remi (Page 2)</h2>
+                        </div>
                         <span className="text-xs bg-purple-100 text-[#5D3FD3] px-2.5 py-1 rounded-full font-bold">Multi-HP</span>
                     </div>
 
                     {!roomId ? (
                         // Tampilan Awal: Pilih Role
-                        <div className="space-y-4">
-                            <p className="text-sm text-gray-600">Bagi kartu remi secara adil & transparan ke seluruh HP pemain secara real-time.</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={handleCreateRoom} className="p-4 bg-[#5D3FD3] text-white rounded-xl font-bold hover:bg-[#4B0082] transition-all text-center">
-                                    👑 Buat Room Baru
+                        <div className="space-y-4 py-4">
+                            <p className="text-sm text-gray-600 leading-relaxed">
+                                Distribusikan kartu remi secara acak dan adil ke HP masing-masing pemain secara real-time. Pilih peran Anda untuk memulai:
+                            </p>
+                            <div className="grid grid-cols-2 gap-3 pt-2">
+                                <button onClick={handleCreateRoom} className="p-4 bg-[#5D3FD3] text-white rounded-xl font-bold hover:bg-[#4B0082] transition-all text-center flex flex-col items-center justify-center gap-2 shadow">
+                                    <span className="text-xl">👑</span>
+                                    <span>Buat Room Baru</span>
                                 </button>
-                                <button onClick={() => setRoomId('join_mode')} className="p-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all text-center">
-                                    📱 Masuk Room (HP Lain)
+                                <button onClick={() => setRoomId('join_mode')} className="p-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-all text-center flex flex-col items-center justify-center gap-2 border border-gray-200">
+                                    <span className="text-xl">📱</span>
+                                    <span>Masuk Room</span>
                                 </button>
                             </div>
+                            
+                            <button 
+                                onClick={onGoToScores} 
+                                className="w-full mt-4 bg-purple-50 text-[#5D3FD3] border border-purple-200 hover:bg-purple-100 font-bold py-3 rounded-xl transition-all"
+                            >
+                                ← Kembali ke Tabel Skor
+                            </button>
                         </div>
                     ) : roomId === 'join_mode' ? (
                         // Form Join Room untuk HP Lain
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Pilih Nama Anda</label>
                                 <select 
@@ -955,7 +969,7 @@
                                             {myCards.map((card, idx) => (
                                                 <div 
                                                     key={idx} 
-                                                    className="poker-card bg-white rounded-xl shadow-md border border-gray-200 flex flex-col justify-between p-3 h-28 relative overflow-hidden select-none"
+                                                    className="poker-card bg-white rounded-xl shadow-md border border-gray-200 flex flex-col justify-between p-3 h-28 relative overflow-hidden select-none animate-fadeIn"
                                                 >
                                                     <div className={`text-lg font-black ${card.color === 'red' ? 'text-red-500' : 'text-gray-900'}`}>
                                                         {card.val}
@@ -1013,7 +1027,7 @@
             const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
             
             const [isMenuOpen, setIsMenuOpen] = useState(false);
-            const [showDealer, setShowDealer] = useState(false); // State untuk Toggle Halaman Bagi Kartu
+            const [currentPage, setCurrentPage] = useState('scorekeeper'); // 'scorekeeper' (Page 1) atau 'carddealer' (Page 2)
 
             const audioRef = useRef(null);
             const audioCtxRef = useRef(null);
@@ -1826,7 +1840,8 @@
                     />
 
                     <div className="p-4 pb-12">
-                        <div className="flex justify-between items-center mb-2">
+                        {/* HEADER UTAMA & UTILITY CONTROLS */}
+                        <div className="flex justify-between items-center mb-4">
                             <div className="flex items-center gap-2">
                                 <button 
                                     onClick={toggleListening} 
@@ -1856,20 +1871,27 @@
                                 </div>
                             </div>
 
-                            {/* TOMBOL "BAGI KARTU" */}
                             <div className="flex justify-end gap-2">
-                                <button 
-                                    onClick={() => setShowDealer(!showDealer)} 
-                                    className={`px-4 h-12 rounded-full flex items-center justify-center gap-1.5 font-bold shadow-lg border border-gray-100 transition-colors ${showDealer ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white' : 'bg-white text-[#5D3FD3] hover:bg-[#5D3FD3] hover:text-white'}`}
-                                    title="Buka Pembagi Kartu Remi"
-                                >
-                                    <span>🃏</span> <span>{showDealer ? 'Tutup Kartu' : 'Bagi Kartu'}</span>
-                                </button>
-
                                 <button onClick={() => setIsMenuOpen(true)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#4B0082] text-2xl font-bold shadow-lg border border-gray-100 hover:bg-[#5D3FD3] hover:text-white transition-colors" title="Buka Menu">
                                     ☰
                                 </button>
                             </div>
+                        </div>
+
+                        {/* --- NAVIGATION TAB HEADER (PAGE 1 / PAGE 2 SWITCHER) --- */}
+                        <div className="flex bg-white rounded-xl p-1 shadow-md mb-5 border border-gray-100">
+                            <button
+                                onClick={() => setCurrentPage('scorekeeper')}
+                                className={`flex-1 py-3 text-center rounded-lg font-bold transition-all text-sm flex items-center justify-center gap-1.5 ${currentPage === 'scorekeeper' ? 'bg-[#5D3FD3] text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                📊 <span>Tabel Skor</span>
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage('carddealer')}
+                                className={`flex-1 py-3 text-center rounded-lg font-bold transition-all text-sm flex items-center justify-center gap-1.5 ${currentPage === 'carddealer' ? 'bg-[#5D3FD3] text-white shadow' : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                🃏 <span>Bagi Kartu (Page 2)</span>
+                            </button>
                         </div>
 
                         {voiceTranscript && (
@@ -1884,38 +1906,43 @@
                             </div>
                         )}
 
-                        {/* MENAMPILKAN HALAMAN / SEKSI PEMBAGI KARTU MULTIPLAYER */}
-                        {showDealer && (
+                        {/* --- CONDITIONAL PAGE RENDERING --- */}
+                        {currentPage === 'carddealer' ? (
+                            // HALAMAN 2: BANTU BAGI KARTU (Dedicated Full-Screen View)
                             <CardDealerSection 
                                 players={players} 
                                 setNotification={setNotification} 
                                 db={db}
                                 userId={user?.uid || 'temp-id'}
                                 firebaseReady={firebaseReady}
+                                onGoToScores={() => setCurrentPage('scorekeeper')}
                             />
-                        )}
-                        
-                        <div className="flex items-center justify-center mb-4 relative">
-                            <h1 className="text-3xl font-bold text-gray-800">📊 Tabel Skor</h1>
-                            <button onClick={speakCurrentScores} className="w-12 h-12 rounded-full bg-white border border-[#5D3FD3] text-[#5D3FD3] text-xl flex items-center justify-center shadow-md hover:bg-purple-50 transition-colors absolute right-0" title="Baca Skor Sementara">🔊</button>
-                        </div>
-                        
-                        <ScoreTable data={data} players={players} />
+                        ) : (
+                            // HALAMAN 1: TABEL SKOR & CATAT KEMENANGAN (Score Keeper Main View)
+                            <div className="animate-fadeIn">
+                                <div className="flex items-center justify-center mb-4 relative">
+                                    <h1 className="text-3xl font-bold text-gray-800">📊 Tabel Skor</h1>
+                                    <button onClick={speakCurrentScores} className="w-12 h-12 rounded-full bg-white border border-[#5D3FD3] text-[#5D3FD3] text-xl flex items-center justify-center shadow-md hover:bg-purple-50 transition-colors absolute right-0" title="Baca Skor Sementara">🔊</button>
+                                </div>
+                                
+                                <ScoreTable data={data} players={players} />
 
-                        <WinSection 
-                            players={players} 
-                            onUpdateScore={handleUpdateScore} 
-                            onUpdateTeamScore={handleUpdateTeamScore}
-                            setNotification={setNotification}
-                        />
-                        <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
-                        
-                        <ActionsSection 
-                            onUndo={handleUndo} 
-                            onRedo={handleRedo} 
-                            onResetScores={handleResetScores} 
-                            onResetStakes={handleResetStakes}
-                        />
+                                <WinSection 
+                                    players={players} 
+                                    onUpdateScore={handleUpdateScore} 
+                                    onUpdateTeamScore={handleUpdateTeamScore}
+                                    setNotification={setNotification}
+                                />
+                                <JokerTransferSection players={players} onJokerTransfer={handleJokerTransfer} />
+                                
+                                <ActionsSection 
+                                    onUndo={handleUndo} 
+                                    onRedo={handleRedo} 
+                                    onResetScores={handleResetScores} 
+                                    onResetStakes={handleResetStakes}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <EditStakesModal isVisible={editStakesModalVisible} onClose={() => setEditStakesModalVisible(false)} data={data} players={players} onSave={handleSaveStakes} />
